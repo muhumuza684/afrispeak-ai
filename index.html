@@ -487,7 +487,7 @@ input,textarea,select{font-family:inherit;outline:none}
     <div style="font-size:32px">🔐</div>
     <div class="mod-t">Sign in to save progress</div>
     <div class="mod-s">Your streak, XP, lessons and history are saved when you sign in with Google.</div>
-    <button class="g-btn" onclick="Auth.google()"><span style="font-size:15px;font-weight:700;color:#4285F4">G</span>Continue with Google</button>
+    <button class="g-btn" id="g-signin-btn" onclick="Auth.google()"><span style="font-size:15px;font-weight:700;color:#4285F4">G</span>Continue with Google</button>
     <span class="skip" onclick="UI.closeModal()">Continue as guest</span>
     <div class="err" id="merr"></div>
   </div>
@@ -746,35 +746,60 @@ const Auth={
   _a:null,
   init(app){
     this._a=app.auth();
-    // Handle redirect result first
-    this._a.getRedirectResult().then(result=>{
-      if(result&&result.user){
+    this._a.onAuthStateChanged(u=>{
+      S.user=u;
+      S._load();
+      // Close modal if signed in
+      if(u){
         UI.closeModal();
-        UI.toast("Welcome, "+result.user.displayName.split(" ")[0]+"! 🎉");
+        // Re-render everything with new user state
+        UI.all();
+        // Show welcome only on fresh sign in (not page reload)
+        if(Auth._justSignedIn){
+          Auth._justSignedIn=false;
+          UI.toast("Welcome, "+u.displayName.split(" ")[0]+"! 🎉");
+        }
+      } else {
+        UI.all();
       }
-    }).catch(e=>{
-      if(e.code!=="auth/no-current-user"){
-        console.warn("Redirect error:",e.message);
-      }
-    });
-    this._a.onAuthStateChanged(async u=>{
-      S.user=u;S._load();
-      const pb=document.getElementById("plan-btn");
-      if(pb){pb.textContent=S.plan==="pro"?"⭐ Pro":"Free";pb.className="plan-btn "+(S.plan==="pro"?"plan-pro":"plan-free");}
-      UI.all();
     });
   },
+  _justSignedIn:false,
   async google(){
+    const errEl=document.getElementById("merr");
+    if(errEl) errEl.textContent="";
+    const btn=document.querySelector(".g-btn");
+    if(btn){btn.textContent="Signing in...";btn.disabled=true;}
     try{
-      document.getElementById("merr").textContent="Redirecting to Google...";
-      const provider = new firebase.auth.GoogleAuthProvider();
+      const provider=new firebase.auth.GoogleAuthProvider();
       provider.setCustomParameters({prompt:"select_account"});
-      await this._a.signInWithRedirect(provider);
-    }catch(e){document.getElementById("merr").textContent="Error: "+e.message;}
+      // Try popup first — works on desktop and most mobile browsers
+      Auth._justSignedIn=true;
+      await this._a.signInWithPopup(provider);
+      // onAuthStateChanged handles the rest
+    }catch(e){
+      Auth._justSignedIn=false;
+      if(btn){btn.textContent="Continue with Google";btn.disabled=false;}
+      // Popup blocked (common on PWA/mobile) — fall back to redirect
+      if(e.code==="auth/popup-blocked"||e.code==="auth/popup-closed-by-user"||e.code==="auth/cancelled-popup-request"){
+        try{
+          Auth._justSignedIn=true;
+          await this._a.signInWithRedirect(provider);
+        }catch(e2){
+          Auth._justSignedIn=false;
+          if(errEl) errEl.textContent="Sign in failed: "+e2.message;
+        }
+      } else {
+        if(errEl) errEl.textContent="Sign in failed: "+e.message;
+      }
+    }
   },
   async out(){
-    if(this._a)await this._a.signOut();
-    S.user=null;S.init();UI.all();UI.toast("Signed out");
+    if(this._a) await this._a.signOut();
+    S.user=null;
+    S.init();
+    UI.all();
+    UI.toast("Signed out successfully");
   }
 };
 
