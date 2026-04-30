@@ -746,6 +746,15 @@ const Auth={
   _a:null,
   init(app){
     this._a=app.auth();
+    // Handle redirect result (when user comes back from Google sign in page)
+    this._a.getRedirectResult().then(result=>{
+      if(result && result.user){
+        Auth._justSignedIn=true;
+        console.log("[Auth] Redirect sign in successful:", result.user.displayName);
+      }
+    }).catch(e=>{
+      console.warn("[Auth] Redirect result error:", e.code, e.message);
+    });
     this._a.onAuthStateChanged(u=>{
       S.user=u;
       S._load();
@@ -767,30 +776,45 @@ const Auth={
   _justSignedIn:false,
   async google(){
     const errEl=document.getElementById("merr");
-    if(errEl) errEl.textContent="";
     const btn=document.querySelector(".g-btn");
-    if(btn){btn.textContent="Signing in...";btn.disabled=true;}
+    if(errEl) errEl.textContent="";
+
+    // Guard: Firebase not ready yet
+    if(!this._a){
+      // Try to re-initialize
+      try{
+        const app=firebase.app();
+        this._a=app.auth();
+      }catch(e){
+        if(errEl) errEl.textContent="Auth not ready. Please refresh and try again.";
+        return;
+      }
+    }
+
+    if(btn){btn.innerHTML='<span style="font-size:15px;font-weight:700;color:#4285F4">G</span>Signing in...';btn.disabled=true;}
+
     try{
       const provider=new firebase.auth.GoogleAuthProvider();
       provider.setCustomParameters({prompt:"select_account"});
-      // Try popup first — works on desktop and most mobile browsers
       Auth._justSignedIn=true;
       await this._a.signInWithPopup(provider);
-      // onAuthStateChanged handles the rest
+      // onAuthStateChanged fires and handles UI update
     }catch(e){
       Auth._justSignedIn=false;
-      if(btn){btn.textContent="Continue with Google";btn.disabled=false;}
-      // Popup blocked (common on PWA/mobile) — fall back to redirect
+      if(btn){btn.innerHTML='<span style="font-size:15px;font-weight:700;color:#4285F4">G</span>Continue with Google';btn.disabled=false;}
+      // If popup blocked on mobile/PWA — use redirect instead
       if(e.code==="auth/popup-blocked"||e.code==="auth/popup-closed-by-user"||e.code==="auth/cancelled-popup-request"){
         try{
+          if(errEl) errEl.textContent="Opening Google sign in...";
           Auth._justSignedIn=true;
           await this._a.signInWithRedirect(provider);
         }catch(e2){
           Auth._justSignedIn=false;
-          if(errEl) errEl.textContent="Sign in failed: "+e2.message;
+          if(errEl) errEl.textContent="Error: "+e2.message;
         }
       } else {
-        if(errEl) errEl.textContent="Sign in failed: "+e.message;
+        if(errEl) errEl.textContent="Error: "+e.message;
+        console.error("Sign in error:", e);
       }
     }
   },
@@ -1504,17 +1528,26 @@ const Phrases={
 /* ════════ BOOTSTRAP ════════ */
 (function(){
   S.init();
-  let fb=false;
   try{
-    if(CFG.firebase.apiKey&&!CFG.firebase.apiKey.includes("YOUR_")){
-      const app=firebase.initializeApp(CFG.firebase);
+    if(CFG.firebase.apiKey && !CFG.firebase.apiKey.includes("YOUR_")){
+      const app = firebase.initializeApp(CFG.firebase);
       Auth.init(app);
-      // try Firestore for leaderboard — graceful fallback if billing not enabled
-      try{S._db=app.firestore();console.log("Firestore connected");}catch(e){console.warn("Firestore not available, using local mode");S._db=null;}
-      fb=true;
+      // Firestore optional — fallback gracefully
+      try{
+        S._db = app.firestore();
+        console.log("[Firebase] Firestore connected");
+      }catch(e){
+        console.warn("[Firebase] Firestore not available — using localStorage");
+        S._db = null;
+      }
+    } else {
+      console.warn("[Firebase] No valid config — running without auth");
+      UI.all();
     }
-  }catch(e){console.warn("Firebase:",e.message);}
-  if(!fb)UI.all();
+  }catch(e){
+    console.warn("[Firebase] Init failed:", e.message);
+    UI.all();
+  }
 })();
 
 /* ════════ PWA ════════ */
