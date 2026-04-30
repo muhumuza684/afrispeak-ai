@@ -516,10 +516,12 @@ input,textarea,select{font-family:inherit;outline:none}
 /* ════════ CONFIG ════════ */
 const CFG={
   firebase:{
-    apiKey:"YOUR_FIREBASE_API_KEY",
-    authDomain:"YOUR_PROJECT.firebaseapp.com",
-    projectId:"YOUR_PROJECT",
-    appId:"YOUR_APP_ID"
+    apiKey:"AIzaSyDxX3419m7hc09E1maAuzQVHvytzVmormA",
+    authDomain:"afrispeak-ai.firebaseapp.com",
+    projectId:"afrispeak-ai",
+    storageBucket:"afrispeak-ai.firebasestorage.app",
+    messagingSenderId:"341379102993",
+    appId:"1:341379102993:web:f65f651f0f11f5a209f4b0"
   },
   model:"gemini-2.5-flash",maxMsgs:50,
   xpLesson:15,xpQuizPass:25,xpPerfect:40
@@ -744,9 +746,19 @@ const Auth={
   _a:null,
   init(app){
     this._a=app.auth();
+    // Handle redirect result first
+    this._a.getRedirectResult().then(result=>{
+      if(result&&result.user){
+        UI.closeModal();
+        UI.toast("Welcome, "+result.user.displayName.split(" ")[0]+"! 🎉");
+      }
+    }).catch(e=>{
+      if(e.code!=="auth/no-current-user"){
+        console.warn("Redirect error:",e.message);
+      }
+    });
     this._a.onAuthStateChanged(async u=>{
       S.user=u;S._load();
-      // update plan button
       const pb=document.getElementById("plan-btn");
       if(pb){pb.textContent=S.plan==="pro"?"⭐ Pro":"Free";pb.className="plan-btn "+(S.plan==="pro"?"plan-pro":"plan-free");}
       UI.all();
@@ -754,9 +766,10 @@ const Auth={
   },
   async google(){
     try{
-      document.getElementById("merr").textContent="";
-      await this._a.signInWithPopup(new firebase.auth.GoogleAuthProvider());
-      UI.closeModal();UI.toast("Welcome, "+S.user.displayName.split(" ")[0]+"! 🎉");
+      document.getElementById("merr").textContent="Redirecting to Google...";
+      const provider = new firebase.auth.GoogleAuthProvider();
+      provider.setCustomParameters({prompt:"select_account"});
+      await this._a.signInWithRedirect(provider);
     }catch(e){document.getElementById("merr").textContent="Error: "+e.message;}
   },
   async out(){
