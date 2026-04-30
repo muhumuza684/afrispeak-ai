@@ -1,0 +1,1579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no"/>
+<title>AfriSpeak AI</title>
+<meta name="theme-color" content="#D4A017"/>
+<link rel="manifest" href="/manifest.json"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="AfriSpeak"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<link rel="apple-touch-icon" href="/icons/icon-192.png"/>
+<link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png"/>
+<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png"/>
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-96.png"/>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<style>
+
+.install-top-btn{
+  display:none;align-items:center;gap:5px;
+  background:var(--accent);color:var(--bg);border:none;
+  border-radius:var(--rf);padding:5px 11px;font-size:11px;font-weight:700;
+  cursor:pointer;animation:pulse-gold 2s infinite;
+}
+@keyframes pulse-gold{0%,100%{box-shadow:0 0 0 0 rgba(212,160,23,.4)}50%{box-shadow:0 0 0 6px rgba(212,160,23,0)}}
+
+/* ═══════════════════════════════════════════
+   TOKENS
+═══════════════════════════════════════════ */
+:root{
+  --bg:#0d0d0d;--surf:#161616;--surf2:#1f1f1f;--surf3:#2a2a2a;
+  --border:#2e2e2e;--text:#f0f0f0;--muted:#666;
+  --accent:#D4A017;--accent-bg:#2a2000;--accent-dim:#b38a12;
+  --ub:#D4A017;--ut:#0d0d0d;--bb:#1e1e1e;--bt:#f0f0f0;
+  --green:#22c55e;--red:#ef4444;--purple:#a855f7;
+  --r:13px;--rsm:9px;--rf:9999px;
+  --sb:220px;--topbar:52px;
+}
+.light{
+  --bg:#f2f2f2;--surf:#fff;--surf2:#f0f0f0;--surf3:#e4e4e4;
+  --border:#e0e0e0;--text:#111;--muted:#999;
+  --accent:#1B4332;--accent-bg:#e8f5e9;--accent-dim:#145c2a;
+  --ub:#1B4332;--ut:#fff;--bb:#fff;--bt:#111;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);transition:background .2s,color .2s}
+button{cursor:pointer;font-family:inherit;border:none;outline:none}
+input,textarea,select{font-family:inherit;outline:none}
+::-webkit-scrollbar{width:3px}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ═══════════════════════════════════════════
+   APP SHELL — DESKTOP
+═══════════════════════════════════════════ */
+#app{display:flex;flex-direction:column;height:100vh;height:100dvh}
+.topbar{
+  height:var(--topbar);padding:0 14px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--surf);border-bottom:1px solid var(--border);z-index:30;
+  position:relative;
+}
+.layout{display:flex;flex:1;overflow:hidden;position:relative}
+.sidebar{
+  width:var(--sb);flex-shrink:0;background:var(--surf);
+  border-right:1px solid var(--border);display:flex;flex-direction:column;
+  overflow:hidden;transition:transform .25s ease;z-index:20;
+}
+.main{flex:1;display:flex;flex-direction:column;overflow:hidden;min-width:0}
+
+/* ═══════════════════════════════════════════
+   MOBILE — sidebar becomes a drawer
+═══════════════════════════════════════════ */
+@media(max-width:640px){
+  :root{--topbar:48px}
+  .sidebar{
+    position:fixed;top:var(--topbar);left:0;bottom:0;
+    width:80vw;max-width:280px;
+    transform:translateX(-100%);
+    box-shadow:4px 0 20px rgba(0,0,0,.5);
+  }
+  .sidebar.open{transform:translateX(0)}
+  .sb-overlay{
+    display:none;position:fixed;inset:0;top:var(--topbar);
+    background:rgba(0,0,0,.5);z-index:19;
+  }
+  .sb-overlay.show{display:block}
+  .main{width:100%}
+  .menu-btn{display:flex !important}
+}
+.menu-btn{
+  display:none;align-items:center;justify-content:center;
+  width:34px;height:34px;background:var(--surf2);border:1px solid var(--border);
+  border-radius:var(--rsm);font-size:16px;flex-shrink:0;
+}
+.sb-overlay{display:none}
+
+/* ═══════════════════════════════════════════
+   TOPBAR
+═══════════════════════════════════════════ */
+.logo{display:flex;align-items:center;gap:7px}
+.logo-mark{width:28px;height:28px;background:var(--accent);border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.logo-text{font-size:15px;font-weight:700;letter-spacing:-.4px}
+.logo-ai{font-size:9px;background:var(--accent);color:var(--bg);padding:2px 6px;border-radius:var(--rf);font-weight:700}
+.plan-btn{font-size:10px;padding:3px 9px;border-radius:var(--rf);font-weight:700;cursor:pointer;border:none;transition:all .15s}
+.plan-free{background:var(--surf2);color:var(--muted);border:1px solid var(--border)}
+.plan-pro{background:linear-gradient(135deg,#a855f7,#6366f1);color:#fff}
+.tr{display:flex;align-items:center;gap:6px}
+.pill{background:var(--surf2);border:1px solid var(--border);border-radius:var(--rf);padding:4px 10px;font-size:11px;color:var(--text);cursor:pointer}
+.pill:hover{background:var(--surf3)}
+.xp-pill{font-size:11px;font-weight:700;color:var(--accent)}
+.st-pill{font-size:11px;font-weight:700}
+.uchip{display:flex;align-items:center;gap:5px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rf);padding:3px 9px 3px 3px;cursor:pointer}
+.uav{width:22px;height:22px;border-radius:50%;overflow:hidden;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;color:var(--bg);flex-shrink:0}
+.uav img{width:100%;height:100%;object-fit:cover}
+.nudge{font-size:10px;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent);border-radius:var(--rf);padding:4px 9px;cursor:pointer}
+@media(max-width:380px){
+  .xp-pill,.st-pill{display:none}
+  .logo-text{font-size:14px}
+}
+
+/* ═══════════════════════════════════════════
+   HOME SIDEBAR
+═══════════════════════════════════════════ */
+.sb-sec{padding:12px 11px 5px;font-size:9px;font-weight:700;color:var(--muted);letter-spacing:.9px;text-transform:uppercase}
+.lang-list{flex:1;overflow-y:auto;padding:0 7px 7px;-webkit-overflow-scrolling:touch}
+.lang-card{
+  display:flex;align-items:center;gap:9px;padding:11px 10px;
+  border-radius:10px;cursor:pointer;margin-bottom:3px;transition:all .15s;position:relative;
+}
+.lang-card:hover,.lang-card:active{background:var(--surf2)}
+.lang-card.active{background:var(--accent)}
+.lang-card.active .lc-name{color:var(--bg);font-weight:700}
+.lang-card.active .lc-sub,.lang-card.active .lc-arr{color:rgba(0,0,0,.4)}
+.lc-flag{font-size:22px;flex-shrink:0}
+.lc-info{flex:1;min-width:0}
+.lc-name{font-size:13px;font-weight:500;color:var(--text)}
+.lc-sub{font-size:10px;color:var(--muted);margin-top:1px}
+.lc-arr{font-size:14px;color:var(--muted);flex-shrink:0}
+.lc-lvl{font-size:9px;background:var(--accent-bg);color:var(--accent);padding:1px 6px;border-radius:var(--rf);font-weight:700;flex-shrink:0}
+.lang-card.active .lc-lvl{background:rgba(0,0,0,.2);color:var(--bg)}
+.sb-div{height:1px;background:var(--border);margin:5px 8px}
+.sb-link{
+  display:flex;align-items:center;gap:9px;padding:10px 10px;margin:0 7px 2px;
+  border-radius:9px;cursor:pointer;font-size:13px;color:var(--muted);
+  transition:all .15s;background:none;border:none;width:calc(100% - 14px);text-align:left;
+}
+.sb-link:hover,.sb-link.active{background:var(--surf2);color:var(--text);font-weight:500}
+.sb-link svg{width:15px;height:15px;fill:currentColor;flex-shrink:0}
+.sb-bottom{padding:8px}
+
+/* ═══════════════════════════════════════════
+   LANG SIDEBAR
+═══════════════════════════════════════════ */
+.lsh{padding:13px 11px 10px;border-bottom:1px solid var(--border);flex-shrink:0}
+.lsh-back{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted);cursor:pointer;margin-bottom:10px;transition:color .15s}
+.lsh-back:hover{color:var(--text)}
+.lsh-lang{display:flex;align-items:center;gap:8px}
+.lsh-flag{font-size:24px}
+.lsh-name{font-size:14px;font-weight:700}
+.lsh-lvl{font-size:10px;color:var(--muted);margin-top:1px}
+.lsh-bar{height:4px;background:var(--surf2);border-radius:var(--rf);margin-top:8px;overflow:hidden}
+.lsh-fill{height:100%;background:var(--accent);border-radius:var(--rf);transition:width .4s}
+.lnav{flex:1;overflow-y:auto;padding:7px;-webkit-overflow-scrolling:touch}
+.ltab{
+  display:flex;align-items:center;gap:9px;padding:11px 10px;border-radius:9px;
+  cursor:pointer;font-size:13px;color:var(--muted);background:none;border:none;
+  width:100%;text-align:left;transition:all .15s;margin-bottom:2px;
+}
+.ltab:hover,.ltab.active{background:var(--surf2);color:var(--text);font-weight:500}
+.ltab svg{width:15px;height:15px;fill:currentColor;flex-shrink:0}
+.ltab .tag{margin-left:auto;font-size:9px;color:var(--accent);font-weight:700}
+
+/* ═══════════════════════════════════════════
+   CHAT
+═══════════════════════════════════════════ */
+.chat-hdr{
+  display:flex;align-items:center;gap:10px;padding:10px 14px;
+  border-bottom:1px solid var(--border);background:var(--surf);flex-shrink:0;
+}
+.ch-av{width:34px;height:34px;background:var(--accent);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
+.ch-name{font-size:13px;font-weight:600}
+.ch-st{font-size:10px;color:var(--green);display:flex;align-items:center;gap:3px;margin-top:1px}
+.dot{width:5px;height:5px;background:var(--green);border-radius:50%;flex-shrink:0}
+.chat-area{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;-webkit-overflow-scrolling:touch}
+.msg-row{display:flex;flex-direction:column;gap:2px}
+.msg-row.user{align-items:flex-end}
+.msg-row.bot{align-items:flex-start}
+.bubble-wrap{display:flex;flex-direction:column;gap:3px;max-width:85%}
+@media(max-width:640px){.bubble-wrap{max-width:92%}}
+.bubble-local{
+  background:var(--bb);color:var(--bt);border:1px solid var(--border);
+  border-radius:15px 15px 4px 15px;padding:10px 13px;
+  font-size:14px;font-weight:600;line-height:1.55;word-break:break-word;
+}
+.bubble-en{
+  background:var(--surf2);color:var(--muted);border:1px solid var(--border);
+  border-radius:4px 4px 15px 15px;padding:7px 12px;
+  font-size:12px;font-style:italic;line-height:1.5;word-break:break-word;
+}
+.user-bubble{
+  background:var(--ub);color:var(--ut);border-radius:15px 15px 4px 15px;
+  padding:10px 13px;max-width:85%;font-size:13px;line-height:1.55;word-break:break-word;
+}
+@media(max-width:640px){.user-bubble{max-width:92%}}
+.msg-meta{display:flex;align-items:center;gap:5px;padding:0 3px;margin-top:1px;flex-wrap:wrap}
+.msg-time{font-size:9px;color:var(--muted)}
+.spk-btn{
+  background:none;border:1px solid var(--border);font-size:10px;color:var(--muted);
+  padding:3px 9px;border-radius:var(--rf);line-height:1.4;display:flex;align-items:center;gap:3px;transition:all .15s;
+}
+.spk-btn:hover{border-color:var(--accent);color:var(--accent)}
+.spk-btn.playing{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.typing{display:flex;gap:4px;padding:3px 0}
+.typing span{width:7px;height:7px;background:var(--muted);border-radius:50%;animation:bo .9s infinite}
+.typing span:nth-child(2){animation-delay:.2s}
+.typing span:nth-child(3){animation-delay:.4s}
+@keyframes bo{0%,80%,100%{transform:scale(.7);opacity:.4}40%{transform:scale(1);opacity:1}}
+.input-area{
+  padding:10px 12px;border-top:1px solid var(--border);background:var(--surf);
+  display:flex;gap:7px;align-items:center;flex-shrink:0;
+}
+.msg-input{
+  flex:1;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rf);
+  padding:10px 14px;font-size:14px;color:var(--text);transition:border .15s;min-width:0;
+}
+.msg-input:focus{border-color:var(--accent)}
+.msg-input::placeholder{color:var(--muted)}
+.mic-btn{
+  width:36px;height:36px;border-radius:50%;background:var(--surf2);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;transition:all .15s;
+}
+.mic-btn:hover{border-color:var(--accent)}
+.mic-btn.rec{background:var(--red);border-color:var(--red);animation:pu 1s infinite}
+@keyframes pu{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+.send-btn{
+  width:36px;height:36px;border-radius:50%;background:var(--accent);display:flex;
+  align-items:center;justify-content:center;flex-shrink:0;font-size:15px;color:var(--bg);transition:opacity .15s;
+}
+.send-btn:hover{opacity:.85}
+.send-btn:disabled{opacity:.4;cursor:not-allowed}
+.vbar{display:none;align-items:center;gap:7px;padding:6px 14px;background:rgba(239,68,68,.08);border-top:1px solid rgba(239,68,68,.2);font-size:11px;color:var(--red);flex-shrink:0}
+.vbar.on{display:flex}
+.vdot{width:7px;height:7px;background:var(--red);border-radius:50%;animation:pu 1s infinite}
+
+/* ═══════════════════════════════════════════
+   INNER SCREENS
+═══════════════════════════════════════════ */
+.inner{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:11px;-webkit-overflow-scrolling:touch}
+.card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:13px}
+.clabel{font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.5px;text-transform:uppercase;margin-bottom:7px}
+.tc-sel{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rsm);padding:9px 11px;color:var(--text);font-size:13px}
+.tc-sel:focus{border-color:var(--accent)}
+.tc-ta{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rsm);padding:10px 11px;color:var(--text);font-size:14px;resize:none;height:90px;line-height:1.5}
+.tc-ta:focus{border-color:var(--accent)}
+.res-box{background:var(--surf2);border-radius:var(--rsm);padding:11px;font-size:13px;min-height:64px;line-height:1.6;color:var(--text)}
+.swap-row{display:flex;gap:7px;align-items:center}
+.swap-row select{flex:1}
+.swap-btn{background:var(--surf2);border:1px solid var(--border);border-radius:var(--rsm);padding:9px 11px;color:var(--text);font-size:14px;transition:all .15s}
+.swap-btn:hover{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.act-btn{width:100%;background:var(--accent);color:var(--bg);border:none;border-radius:var(--rsm);padding:12px;font-size:14px;font-weight:700;transition:opacity .15s}
+.act-btn:hover{opacity:.88}
+.act-btn:disabled{opacity:.5;cursor:not-allowed}
+.phrase-card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:13px;cursor:pointer;transition:border-color .15s}
+.phrase-card:hover{border-color:var(--accent)}
+.pc-en{font-size:9px;color:var(--muted);font-weight:700;letter-spacing:.4px;text-transform:uppercase;margin-bottom:4px}
+.pc-lo{font-size:15px;font-weight:600}
+.pc-pr{font-size:11px;color:var(--accent);margin-top:3px;font-style:italic}
+.dashed{background:var(--surf);border:1.5px dashed var(--border);border-radius:var(--r);padding:13px;font-size:13px;color:var(--muted);text-align:center;font-family:inherit;width:100%;transition:all .15s}
+.dashed:hover{border-color:var(--accent);color:var(--text)}
+.dashed:disabled{opacity:.5;cursor:not-allowed}
+
+/* ═══════════════════════════════════════════
+   GOALS
+═══════════════════════════════════════════ */
+.goals-section{display:flex;flex-direction:column;gap:8px}
+.goal-item{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:13px;display:flex;align-items:center;gap:12px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden}
+.goal-item::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--border);border-radius:2px 0 0 2px;transition:background .2s}
+.goal-item.active::before{background:var(--accent)}
+.goal-item:hover{border-color:var(--accent)}
+.goal-item.done{border-color:var(--green);opacity:.75}
+.goal-item.done::before{background:var(--green)}
+.gi-ring{width:44px;height:44px;flex-shrink:0;position:relative}
+.gi-ring svg{width:44px;height:44px;transform:rotate(-90deg)}
+.gi-ring .track{fill:none;stroke:var(--surf2);stroke-width:3}
+.gi-ring .fill{fill:none;stroke:var(--accent);stroke-width:3;stroke-linecap:round;transition:stroke-dashoffset .4s}
+.gi-ring.done .fill{stroke:var(--green)}
+.gi-center{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700}
+.gi-body{flex:1;min-width:0}
+.gi-title{font-size:12px;font-weight:600}
+.gi-sub{font-size:10px;color:var(--muted);margin-top:2px}
+.gi-xp{font-size:10px;font-weight:700;color:var(--accent)}
+.gi-sel{font-size:9px;background:var(--accent-bg);color:var(--accent);padding:2px 7px;border-radius:var(--rf);font-weight:700;flex-shrink:0}
+.goal-item.done .gi-xp{color:var(--green)}
+.add-goal-btn{display:flex;align-items:center;justify-content:center;gap:6px;background:var(--surf2);border:1.5px dashed var(--border);border-radius:var(--r);padding:11px;font-size:12px;color:var(--muted);cursor:pointer;transition:all .15s}
+.add-goal-btn:hover{border-color:var(--accent);color:var(--text)}
+.goal-picker{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:13px;display:flex;flex-direction:column;gap:7px}
+.gp-item{display:flex;align-items:center;gap:10px;padding:11px;border-radius:var(--rsm);border:1px solid var(--border);cursor:pointer;transition:all .15s}
+.gp-item:hover,.gp-item.picked{border-color:var(--accent);background:var(--accent-bg)}
+.gp-ico{font-size:20px;flex-shrink:0}
+.gp-t{font-size:12px;font-weight:600}
+.gp-s{font-size:10px;color:var(--muted);margin-top:1px}
+.gp-xp{font-size:10px;font-weight:700;color:var(--accent);margin-left:auto;flex-shrink:0}
+
+/* ═══════════════════════════════════════════
+   LESSONS
+═══════════════════════════════════════════ */
+.lesson-card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:13px;cursor:pointer;display:flex;align-items:center;gap:11px;transition:all .15s}
+.lesson-card:hover:not(.locked){border-color:var(--accent);background:var(--surf2)}
+.lesson-card.done{border-color:var(--green)}
+.lesson-card.locked{opacity:.5;cursor:not-allowed}
+.ln{width:36px;height:36px;border-radius:50%;background:var(--surf2);border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;flex-shrink:0}
+.lesson-card.done .ln{background:var(--green);border-color:var(--green);color:#fff}
+.lesson-card.unlocked .ln{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.lb{flex:1;min-width:0}
+.lt{font-size:13px;font-weight:600}
+.ls{font-size:10px;color:var(--muted);margin-top:2px}
+.lxp{font-size:10px;color:var(--accent);font-weight:700;flex-shrink:0}
+.prog-bar{height:4px;background:var(--surf2);border-radius:var(--rf);overflow:hidden;margin-top:5px}
+.prog-fill{height:100%;background:var(--accent);border-radius:var(--rf);transition:width .4s}
+
+/* ═══════════════════════════════════════════
+   QUIZ
+═══════════════════════════════════════════ */
+.quiz-shell{flex:1;display:flex;flex-direction:column;overflow:hidden}
+.qtop{padding:12px 14px;background:var(--surf);border-bottom:1px solid var(--border);flex-shrink:0}
+.qprog{display:flex;align-items:center;gap:9px;margin-bottom:6px}
+.qstep{font-size:11px;color:var(--muted);white-space:nowrap}
+.qbar{flex:1;height:5px;background:var(--surf2);border-radius:var(--rf);overflow:hidden}
+.qfill{height:100%;background:var(--accent);border-radius:var(--rf);transition:width .3s}
+.qsc{font-size:11px;font-weight:700;color:var(--accent);white-space:nowrap}
+.qbody{flex:1;overflow-y:auto;padding:15px;display:flex;flex-direction:column;gap:11px;-webkit-overflow-scrolling:touch}
+.qq{font-size:15px;font-weight:600;line-height:1.5}
+.qsub{font-size:11px;color:var(--muted)}
+.qopts{display:flex;flex-direction:column;gap:8px}
+.qopt{background:var(--surf2);border:1px solid var(--border);border-radius:var(--rsm);padding:13px;font-size:13px;text-align:left;color:var(--text);transition:all .15s;width:100%}
+.qopt:hover:not(:disabled){border-color:var(--accent);background:var(--accent-bg)}
+.qopt.ok{background:#14532d;border-color:var(--green);color:#bbf7d0}
+.qopt.no{background:#450a0a;border-color:var(--red);color:#fca5a5}
+.qopt:disabled{cursor:not-allowed}
+.qinp{width:100%;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rsm);padding:12px;font-size:14px;color:var(--text)}
+.qinp:focus{border-color:var(--accent)}
+.qfb{padding:11px 13px;border-radius:var(--rsm);font-size:13px;line-height:1.5;font-weight:500}
+.qfb.ok{background:#14532d;color:#bbf7d0;border:1px solid var(--green)}
+.qfb.no{background:#450a0a;color:#fca5a5;border:1px solid var(--red)}
+.qnext{width:100%;background:var(--accent);color:var(--bg);border:none;border-radius:var(--rsm);padding:13px;font-size:14px;font-weight:700;margin-top:4px}
+.qnext:hover{opacity:.88}
+.qresult{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:13px;padding:24px;text-align:center}
+.qr-ico{font-size:54px}
+.qr-t{font-size:19px;font-weight:700}
+.qr-s{font-size:13px;color:var(--muted);max-width:230px;line-height:1.6}
+.qr-xp{font-size:14px;font-weight:700;color:var(--accent);background:var(--accent-bg);padding:8px 18px;border-radius:var(--rf)}
+.qr-btns{display:flex;flex-direction:column;gap:8px;width:100%;max-width:240px}
+.qr-btn{padding:12px;border-radius:var(--rsm);font-size:13px;font-weight:700;font-family:inherit}
+.qr-btn.p{background:var(--accent);color:var(--bg);border:none}
+.qr-btn.s{background:none;border:1px solid var(--border);color:var(--text)}
+.qr-btn:hover{opacity:.85}
+
+/* ═══════════════════════════════════════════
+   LEADERBOARD
+═══════════════════════════════════════════ */
+.lb-row{display:flex;align-items:center;gap:10px;padding:11px 11px;border-radius:var(--rsm);margin-bottom:2px;transition:background .15s}
+.lb-row:hover{background:var(--surf2)}
+.lb-row.me{background:var(--accent-bg);border:1px solid var(--accent)}
+.lb-rank{width:22px;font-size:13px;font-weight:700;text-align:center;flex-shrink:0}
+.lb-av{width:32px;height:32px;border-radius:50%;background:var(--surf2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;overflow:hidden}
+.lb-av img{width:100%;height:100%;object-fit:cover}
+.lb-name{flex:1;font-size:13px;font-weight:500;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lb-st{font-size:11px;color:var(--muted);white-space:nowrap}
+.lb-xp{font-size:12px;font-weight:700;color:var(--accent);white-space:nowrap}
+
+/* ═══════════════════════════════════════════
+   HOME SCREEN
+═══════════════════════════════════════════ */
+.home-screen{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:14px;-webkit-overflow-scrolling:touch}
+.home-hero{background:linear-gradient(135deg,var(--accent) 0%,var(--accent-dim) 100%);border-radius:16px;padding:18px;color:var(--bg)}
+.hh-top{display:flex;justify-content:space-between;margin-bottom:14px;gap:10px}
+.hh-g{font-size:17px;font-weight:700;line-height:1.3}
+.hh-s{font-size:11px;opacity:.75;margin-top:2px}
+.hh-st{text-align:right;flex-shrink:0}
+.hh-f{font-size:24px;line-height:1}
+.hh-n{font-size:19px;font-weight:700;line-height:1}
+.hh-l{font-size:10px;opacity:.75}
+.hh-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px}
+.hh-stat{background:rgba(0,0,0,.15);border-radius:8px;padding:9px;text-align:center}
+.hh-sn{font-size:18px;font-weight:700}
+.hh-sl{font-size:9px;opacity:.75;margin-top:1px}
+.h-sec{font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.7px;text-transform:uppercase}
+.prog-card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:13px;cursor:pointer;transition:all .15s}
+.prog-card:hover{border-color:var(--accent)}
+
+/* ═══════════════════════════════════════════
+   PLANS
+═══════════════════════════════════════════ */
+.plans-screen{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px;-webkit-overflow-scrolling:touch}
+.plan-card{border-radius:var(--r);padding:18px;border:1px solid var(--border);background:var(--surf);position:relative;overflow:hidden}
+.plan-card.pro{border-color:var(--purple);background:linear-gradient(135deg,rgba(168,85,247,.08),rgba(99,102,241,.08))}
+.plan-popular{position:absolute;top:12px;right:12px;background:linear-gradient(135deg,#a855f7,#6366f1);color:#fff;font-size:9px;font-weight:700;padding:3px 9px;border-radius:var(--rf)}
+.plan-name{font-size:16px;font-weight:700;margin-bottom:3px}
+.plan-price{font-size:24px;font-weight:700;color:var(--accent);margin-bottom:2px}
+.plan-price span{font-size:12px;font-weight:400;color:var(--muted)}
+.plan-desc{font-size:12px;color:var(--muted);margin-bottom:13px;line-height:1.5}
+.plan-features{display:flex;flex-direction:column;gap:7px;margin-bottom:14px}
+.pf{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.4}
+.pf-ico{font-size:13px;width:18px;flex-shrink:0;text-align:center;margin-top:1px}
+.pf.locked{color:var(--muted)}
+.plan-btn{width:100%;padding:12px;border-radius:var(--rsm);font-size:13px;font-weight:700;font-family:inherit;cursor:pointer;border:none;transition:opacity .15s}
+.plan-btn.free{background:var(--surf2);color:var(--text);border:1px solid var(--border)}
+.plan-btn.pro-btn{background:linear-gradient(135deg,#a855f7,#6366f1);color:#fff}
+.plan-btn:hover{opacity:.88}
+
+/* ═══════════════════════════════════════════
+   HISTORY / PROFILE
+═══════════════════════════════════════════ */
+.scr-full{flex:1;overflow-y:auto;padding:13px;display:flex;flex-direction:column;gap:9px;-webkit-overflow-scrolling:touch}
+.hdate{font-size:9px;font-weight:700;color:var(--muted);letter-spacing:.6px;text-transform:uppercase;padding:7px 0 2px}
+.hitem{display:flex;align-items:center;gap:9px;padding:10px 11px;border-radius:var(--rsm);cursor:pointer;transition:background .15s}
+.hitem:hover{background:var(--surf2)}
+.hi-ico{font-size:18px;width:28px;text-align:center;flex-shrink:0}
+.hi-b{flex:1;min-width:0}
+.hi-t{font-size:12px;font-weight:500}
+.hi-s{font-size:10px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hi-time{font-size:9px;color:var(--muted);flex-shrink:0}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:11px;padding:36px;text-align:center}
+.empty-ico{font-size:40px}
+.empty-t{font-size:14px;font-weight:600}
+.empty-s{font-size:12px;color:var(--muted);max-width:200px;line-height:1.6}
+.lock-btn{background:var(--accent);color:var(--bg);border:none;border-radius:var(--rsm);padding:11px 22px;font-size:13px;font-weight:700;font-family:inherit}
+.prof-top{display:flex;flex-direction:column;align-items:center;gap:9px;padding:20px;text-align:center}
+.prof-pic{width:68px;height:68px;border-radius:50%;object-fit:cover;border:3px solid var(--accent)}
+.prof-init{width:68px;height:68px;border-radius:50%;background:var(--accent);color:var(--bg);display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;border:3px solid var(--accent)}
+.pref-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);font-size:13px}
+.pref-row:last-child{border:none}
+.pref-l{font-weight:500}
+.pref-v{color:var(--muted)}
+.so-btn{width:100%;background:none;border:1px solid var(--red);color:var(--red);border-radius:var(--rsm);padding:12px;font-size:13px;font-weight:600;font-family:inherit;transition:all .15s}
+.so-btn:hover{background:var(--red);color:#fff}
+.stat-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:7px;width:100%}
+.stat-c{background:var(--surf2);border-radius:var(--rsm);padding:11px;text-align:center}
+.stat-n{font-size:18px;font-weight:700;color:var(--accent)}
+.stat-l{font-size:9px;color:var(--muted);margin-top:2px}
+
+/* ═══════════════════════════════════════════
+   PWA INSTALL BANNER
+═══════════════════════════════════════════ */
+.pwa-banner{
+  position:fixed;bottom:0;left:0;right:0;z-index:9998;
+  background:var(--surf);border-top:2px solid var(--accent);
+  padding:12px 16px;display:flex;align-items:center;gap:12px;
+  box-shadow:0 -4px 24px rgba(0,0,0,.4);
+  transform:translateY(100%);transition:transform .35s ease;
+}
+.pwa-banner.show{transform:translateY(0)}
+.pwa-banner-icon{width:42px;height:42px;border-radius:10px;flex-shrink:0}
+.pwa-banner-text{flex:1;min-width:0}
+.pwa-banner-title{font-size:13px;font-weight:700}
+.pwa-banner-sub{font-size:11px;color:var(--muted);margin-top:1px}
+.pwa-install-btn{background:var(--accent);color:var(--bg);border:none;border-radius:var(--rsm);padding:9px 16px;font-size:12px;font-weight:700;font-family:inherit;flex-shrink:0;white-space:nowrap}
+.pwa-dismiss{background:none;border:none;color:var(--muted);font-size:20px;padding:4px 6px;flex-shrink:0;line-height:1}
+.offline-bar{display:none;position:fixed;top:var(--topbar);left:0;right:0;z-index:50;background:var(--red);color:#fff;text-align:center;font-size:11px;padding:5px;font-weight:600}
+.offline-bar.show{display:block}
+
+/* ═══════════════════════════════════════════
+   TOAST / MODAL
+═══════════════════════════════════════════ */
+.toast{position:fixed;bottom:72px;left:50%;transform:translateX(-50%);background:var(--surf);border:1px solid var(--border);color:var(--text);padding:10px 18px;border-radius:var(--rf);font-size:12px;z-index:9999;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:0 4px 18px rgba(0,0,0,.35);white-space:nowrap;max-width:90vw;text-align:center}
+.toast.show{opacity:1}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:flex;align-items:flex-end;justify-content:center;padding:0}
+@media(min-width:641px){.overlay{align-items:center;padding:18px}}
+.modal{background:var(--surf);border:1px solid var(--border);border-radius:var(--r) var(--r) 0 0;padding:24px 20px 32px;max-width:420px;width:100%;text-align:center;display:flex;flex-direction:column;gap:13px}
+@media(min-width:641px){.modal{border-radius:var(--r);padding:24px 20px}}
+.mod-t{font-size:16px;font-weight:700}
+.mod-s{font-size:13px;color:var(--muted);line-height:1.6}
+.g-btn{display:flex;align-items:center;justify-content:center;gap:9px;background:var(--surf2);border:1px solid var(--border);border-radius:var(--rsm);padding:13px;font-size:14px;font-weight:600;color:var(--text);font-family:inherit;transition:background .15s;width:100%}
+.g-btn:hover{background:var(--surf3)}
+.skip{font-size:12px;color:var(--muted);cursor:pointer;text-decoration:underline}
+.err{font-size:11px;color:var(--red);min-height:14px}
+</style>
+</head>
+<body>
+<div class="toast" id="toast"></div>
+<div class="overlay" id="modal" style="display:none">
+  <div class="modal">
+    <div style="font-size:32px">🔐</div>
+    <div class="mod-t">Sign in to save progress</div>
+    <div class="mod-s">Your streak, XP, lessons and history are saved when you sign in with Google.</div>
+    <button class="g-btn" onclick="Auth.google()"><span style="font-size:15px;font-weight:700;color:#4285F4">G</span>Continue with Google</button>
+    <span class="skip" onclick="UI.closeModal()">Continue as guest</span>
+    <div class="err" id="merr"></div>
+  </div>
+</div>
+<div id="app">
+  <div class="topbar">
+    <button class="menu-btn" id="menu-btn" onclick="App.toggleSidebar()" aria-label="Menu">☰</button>
+    <div class="logo">
+      <div class="logo-mark">🌍</div>
+      <span class="logo-text">AfriSpeak</span>
+      <span class="logo-ai">AI</span>
+      <button class="plan-btn" id="plan-btn" onclick="App.go('plans')">Free</button>
+    </div>
+    <button class="install-top-btn" id="install-top-btn" onclick="triggerInstall()">📲 Install</button>
+    <div class="tr" id="tr"></div>
+  </div>
+  <div class="layout">
+    <div class="sb-overlay" id="sb-overlay" onclick="App.closeSidebar()"></div>
+    <div class="sidebar" id="sidebar"></div>
+    <div class="main" id="main"></div>
+  </div>
+</div>
+<script>
+'use strict';
+
+/* ════════ CONFIG ════════ */
+const CFG={
+  firebase:{
+    apiKey:"YOUR_FIREBASE_API_KEY",
+    authDomain:"YOUR_PROJECT.firebaseapp.com",
+    projectId:"YOUR_PROJECT",
+    appId:"YOUR_APP_ID"
+  },
+  model:"gemini-2.5-flash",maxMsgs:50,
+  xpLesson:15,xpQuizPass:25,xpPerfect:40
+};
+
+/* ════════ LANGUAGES ════════ */
+const LANGS={
+  luganda: {name:"Luganda",  flag:"🇺🇬",sub:"Uganda",        vl:"en-US", sys:"You are AfriSpeak AI, warm and rooted in Buganda culture. Reply ALWAYS in this exact format:\n[LOCAL]: <Luganda text here>\n[EN]: <English translation here>\nUse Buganda proverbs where fitting. Keep both parts on separate lines."},
+  swahili: {name:"Kiswahili",flag:"🌍", sub:"East Africa",   vl:"sw-KE", sys:"You are AfriSpeak AI. Reply ALWAYS in this exact format:\n[LOCAL]: <Kiswahili text here>\n[EN]: <English translation here>\nBe warm and culturally aware. Keep both parts on separate lines."},
+  yoruba:  {name:"Yoruba",   flag:"🇳🇬",sub:"Nigeria/Benin", vl:"yo-NG", sys:"You are AfriSpeak AI. Reply ALWAYS in this exact format:\n[LOCAL]: <Yoruba text here>\n[EN]: <English translation here>\nBe warm and culturally aware. Keep both parts on separate lines."},
+  igbo:    {name:"Igbo",     flag:"🇳🇬",sub:"Nigeria",       vl:"en-NG", sys:"You are AfriSpeak AI. Reply ALWAYS in this exact format:\n[LOCAL]: <Igbo text here>\n[EN]: <English translation here>\nBe warm and culturally aware. Keep both parts on separate lines."},
+  amharic: {name:"Amharic",  flag:"🇪🇹",sub:"Ethiopia",      vl:"am-ET", sys:"You are AfriSpeak AI. Reply ALWAYS in this exact format:\n[LOCAL]: <Amharic text here>\n[EN]: <English translation here>\nBe warm and culturally aware. Keep both parts on separate lines."},
+  zulu:    {name:"Zulu",     flag:"🇿🇦",sub:"South Africa",  vl:"zu-ZA", sys:"You are AfriSpeak AI. Reply ALWAYS in this exact format:\n[LOCAL]: <Zulu text here>\n[EN]: <English translation here>\nBe warm and culturally aware. Keep both parts on separate lines."},
+  arabic:  {name:"Arabic",   flag:"🇸🇦",sub:"North Africa",  vl:"ar-SA", sys:"You are AfriSpeak AI. Reply ALWAYS in this exact format:\n[LOCAL]: <Arabic text here>\n[EN]: <English translation here>\nBe warm and culturally aware. Keep both parts on separate lines."}
+};
+const LEVELS=["Beginner","Basic","Intermediate","Advanced","Fluent"];
+const TOPICS=["Greetings & Introductions","Numbers & Colours","Food & Shopping","Family & Home","Directions & Transport"];
+
+/* ════════ ALL AVAILABLE GOALS ════════ */
+const ALL_GOALS=[
+  {id:"lesson_1",  ico:"📚", title:"Complete a lesson",      sub:"Finish any lesson today",           xp:15, type:"lesson", target:1},
+  {id:"msg_5",     ico:"💬", title:"Send 5 messages",         sub:"Chat actively in your language",    xp:10, type:"msgs",   target:5},
+  {id:"msg_10",    ico:"🗣️", title:"Send 10 messages",        sub:"Deep conversation practice",        xp:20, type:"msgs",   target:10},
+  {id:"quiz_pass", ico:"🎯", title:"Pass a quiz",             sub:"Score 60%+ on any quiz",            xp:25, type:"quiz",   target:1},
+  {id:"quiz_perfect",ico:"⭐",title:"Perfect quiz score",     sub:"Score 100% on a quiz",              xp:40, type:"perfect",target:1},
+  {id:"streak_3",  ico:"🔥", title:"Maintain your streak",   sub:"Keep your daily streak going",      xp:5,  type:"streak",  target:1},
+  {id:"phrases_1", ico:"🌱", title:"Generate phrases",        sub:"Discover new words today",          xp:8,  type:"phrases", target:1},
+  {id:"translate_1",ico:"🔤",title:"Translate something",    sub:"Use the translate feature",         xp:8,  type:"trans",   target:1},
+  {id:"voice_3",   ico:"🎙️", title:"Use voice 3 times",      sub:"Practice speaking out loud",        xp:12, type:"voice",   target:3},
+  {id:"lesson_all",ico:"🏆", title:"Complete all 5 lessons", sub:"Finish every lesson in this language",xp:100,type:"all_lessons",target:5},
+];
+
+/* ════════ PLANS ════════ */
+const PLANS={
+  free:{
+    name:"Free",price:"$0",period:"forever",
+    desc:"Perfect for exploring African languages",
+    features:[
+      {ico:"✅",text:"Chat in all 7 languages",ok:true},
+      {ico:"✅",text:"5 lessons per language",ok:true},
+      {ico:"✅",text:"Basic phrase generation",ok:true},
+      {ico:"✅",text:"Voice input & output",ok:true},
+      {ico:"✅",text:"Translation tool",ok:true},
+      {ico:"✅",text:"20 messages per day",ok:true},
+      {ico:"❌",text:"PDF lesson reports",ok:false},
+      {ico:"❌",text:"Download lesson documents",ok:false},
+      {ico:"❌",text:"Unlimited messages",ok:false},
+      {ico:"❌",text:"Advanced quiz analytics",ok:false},
+      {ico:"❌",text:"Priority AI responses",ok:false},
+    ]
+  },
+  pro:{
+    name:"Pro",price:"$4.99",period:"/month",
+    desc:"Unlock the full AfriSpeak experience",
+    features:[
+      {ico:"✅",text:"Everything in Free",ok:true},
+      {ico:"✅",text:"Unlimited messages",ok:true},
+      {ico:"✅",text:"PDF lesson reports — download & print",ok:true},
+      {ico:"✅",text:"Download lesson notes as Word doc",ok:true},
+      {ico:"✅",text:"Advanced quiz analytics",ok:true},
+      {ico:"✅",text:"Priority AI responses",ok:true},
+      {ico:"✅",text:"All future languages included",ok:true},
+      {ico:"✅",text:"Streak protection (miss 1 day)",ok:true},
+      {ico:"✅",text:"Custom learning goals",ok:true},
+      {ico:"✅",text:"Certificate of completion",ok:true},
+    ]
+  }
+};
+
+/* ════════ STATE ════════ */
+const S={
+  user:null,screen:"home",lang:null,ltab:"chat",
+  dark:true,geminiKey:"AIzaSyDOa8pzBBaKbtwGDNlChS9jVHU2lBDN1kM",plan:"free",
+  xp:0,streak:0,lastActive:"",
+  histories:{},transHistory:[],phrases:[],
+  progress:{},voiceCnt:0,perfectCnt:0,isRec:false,
+  curLesson:null,quiz:null,
+  selectedGoals:[],// array of goal ids user has picked
+  showGoalPicker:false,
+  _speaking:false,_utterance:null,
+  init(){
+    Object.keys(LANGS).forEach(k=>{
+      if(!this.histories[k])this.histories[k]=[];
+      if(!this.progress[k]) this.progress[k]={level:0,done:[],scores:{}};
+    });
+    this.geminiKey=localStorage.getItem("as_k")||"AIzaSyDOa8pzBBaKbtwGDNlChS9jVHU2lBDN1kM";
+    this._load();
+  },
+  _load(){
+    const uid=this.user?this.user.uid:"guest";
+    try{
+      const d=JSON.parse(localStorage.getItem("as_d_"+uid)||"{}");
+      ["xp","streak","lastActive","progress","voiceCnt","perfectCnt","selectedGoals","plan"].forEach(k=>{if(d[k]!==undefined)this[k]=d[k];});
+      if(d.histories)Object.keys(LANGS).forEach(k=>{if(d.histories[k])this.histories[k]=d.histories[k];});
+      if(d.transHistory)this.transHistory=d.transHistory;
+      if(!this.selectedGoals||!this.selectedGoals.length)this.selectedGoals=["lesson_1","msg_5","streak_3"];
+      this._streak();
+    }catch(e){this.selectedGoals=["lesson_1","msg_5","streak_3"];}
+  },
+  save(){
+    const uid=this.user?this.user.uid:"guest";
+    const d={xp:this.xp,streak:this.streak,lastActive:this.lastActive,progress:this.progress,voiceCnt:this.voiceCnt,perfectCnt:this.perfectCnt,selectedGoals:this.selectedGoals,plan:this.plan,histories:this.histories,transHistory:this.transHistory};
+    localStorage.setItem("as_d_"+uid,JSON.stringify(d));
+    // push to firestore if available
+    if(S._db&&S.user){
+      try{S._db.collection("users").doc(S.user.uid).set({xp:this.xp,streak:this.streak,displayName:S.user.displayName,photoURL:S.user.photoURL||"",plan:this.plan,updatedAt:new Date().toISOString()},{merge:true});}catch(e){}
+    }
+  },
+  _db:null,
+  _streak(){
+    const today=new Date().toDateString(),yest=new Date(Date.now()-86400000).toDateString();
+    if(this.lastActive===today)return;
+    this.streak=this.lastActive===yest?this.streak+1:1;
+    this.lastActive=today;this.save();
+  },
+  addXP(n){this.xp+=n;UI.toast("+"+n+" XP 🌟");this.save();if(S._db&&S.user)this.save();},
+  lvl(lk){return LEVELS[this.progress[lk]?.level||0];},
+  pct(lk){return Math.min(100,Math.round(((this.progress[lk]?.done||[]).length/5)*100));},
+  msgs(lk){return(this.histories[lk]||[]).filter(m=>m.role==="user").length;},
+  allMsgs(){return Object.keys(LANGS).reduce((a,k)=>a+this.msgs(k),0);},
+  allLessons(){return Object.keys(LANGS).reduce((a,k)=>a+(this.progress[k]?.done||[]).length,0);},
+  doneLesson(lk,i){
+    const p=this.progress[lk];
+    if(!p.done.includes(i))p.done.push(i);
+    if(p.done.length>=5)p.level=Math.min(4,p.level+1);
+    this.addXP(CFG.xpLesson);this.save();
+  },
+  goalProgress(gid,lk){
+    const g=ALL_GOALS.find(x=>x.id===gid);if(!g)return{val:0,max:1,pct:0,done:false};
+    const today=new Date().toDateString();
+    let val=0;
+    if(g.type==="lesson") val=(this.progress[lk]?.done||[]).length>0?1:0;
+    else if(g.type==="msgs") val=this.msgs(lk);
+    else if(g.type==="quiz") val=parseInt(localStorage.getItem("as_qt_"+today)||0);
+    else if(g.type==="perfect") val=parseInt(localStorage.getItem("as_qp_"+today)||0);
+    else if(g.type==="streak") val=this.streak>0?1:0;
+    else if(g.type==="phrases") val=this.phrases.length>0?1:0;
+    else if(g.type==="trans") val=this.transHistory.filter(h=>{try{return new Date(h.date).toDateString()===today;}catch{return false;}}).length>0?1:0;
+    else if(g.type==="voice") val=this.voiceCnt;
+    else if(g.type==="all_lessons") val=(this.progress[lk]?.done||[]).length;
+    const max=g.target;const pct=Math.min(100,Math.round((val/max)*100));
+    return{val:Math.min(val,max),max,pct,done:val>=max};
+  }
+};
+
+/* ════════ PARSE BOT RESPONSE ════════ */
+function parseResponse(text){
+  const localMatch=text.match(/\[LOCAL\]:\s*([\s\S]*?)(?=\[EN\]:|$)/i);
+  const enMatch=text.match(/\[EN\]:\s*([\s\S]*?)$/i);
+  if(localMatch&&enMatch){
+    return{local:localMatch[1].trim(),en:enMatch[1].trim()};
+  }
+  // fallback: check for bracket pattern
+  const bracketMatch=text.match(/^(.*?)\s*[\(\[](.*?)[\)\]]\s*$/s);
+  if(bracketMatch)return{local:bracketMatch[1].trim(),en:bracketMatch[2].trim()};
+  return{local:text,en:null};
+}
+
+/* ════════ AI SERVICE ════════ */
+const AI={
+  async _call(sys,msgs,max=1000){
+    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CFG.model}:generateContent?key=${S.geminiKey}`,{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({system_instruction:{parts:[{text:sys}]},contents:msgs.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]})),generationConfig:{temperature:.7,maxOutputTokens:max}})
+    });
+    const d=await r.json();if(d.error)throw new Error(d.error.message);
+    return d.candidates[0].content.parts[0].text;
+  },
+  chat(msgs,lk){return this._call(LANGS[lk].sys,msgs,1000);},
+  translate(text,from,to){return this._call(`Expert African language translator. Translate from ${from} to ${to}. Return ONLY the translation.`,[{role:"user",content:text}],500);},
+  async phrases(langName){
+    const raw=await this._call("Return ONLY valid JSON array, no markdown.",[{role:"user",content:`7 practical everyday phrases in ${langName}. Format:[{"english":"...","local":"...","pronunciation":"..."}]`}],800);
+    return JSON.parse(raw.replace(/```json|```/g,"").trim());
+  },
+  async lesson(langName,num,level){
+    const raw=await this._call("Return ONLY valid JSON, no markdown.",[{role:"user",content:`Create ${langName} lesson on "${TOPICS[(num-1)%TOPICS.length]}" for ${level} level. JSON: {"topic":"...","phrases":[{"english":"...","local":"...","pronunciation":"..."}],"culturalNote":"..."} — exactly 5 phrases.`}],1000);
+    return JSON.parse(raw.replace(/```json|```/g,"").trim());
+  },
+  async quiz(langName,lessonData){
+    const raw=await this._call("Return ONLY valid JSON array, no markdown.",[{role:"user",content:`5-question quiz on ${langName} using: ${JSON.stringify(lessonData.phrases)}. Return:[{"type":"mcq","question":"...","options":["...","...","...","..."],"answer":"..."},{"type":"type","question":"...","answer":"..."}] alternating mcq/type, exactly 5 questions.`}],1200);
+    return JSON.parse(raw.replace(/```json|```/g,"").trim());
+  }
+};
+
+/* ════════ VOICE SERVICE ════════ */
+const Voice={
+  _r:null,_s:window.speechSynthesis,_current:null,
+  start(lk,onR,onE){
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){UI.toast("Voice not supported on this browser",true);return;}
+    this._r=new SR();this._r.lang=LANGS[lk]?.vl||"en-US";
+    this._r.onresult=e=>onR(e.results[0][0].transcript);
+    this._r.onend=onE;this._r.onerror=e=>{UI.toast("Voice error: "+e.error,true);onE();};
+    this._r.start();
+  },
+  stop(){if(this._r){this._r.stop();this._r=null;}},
+  /* Toggle speak — if already speaking this text, stop. Otherwise speak. */
+  toggle(text,lk,btn){
+    if(this._current===btn){
+      // stop
+      this._s.cancel();
+      this._current=null;
+      document.querySelectorAll(".spk-btn.playing").forEach(b=>{b.classList.remove("playing");b.innerHTML="🔊 Play";});
+      return;
+    }
+    // stop any current
+    this._s.cancel();
+    document.querySelectorAll(".spk-btn.playing").forEach(b=>{b.classList.remove("playing");b.innerHTML="🔊 Play";});
+    this._current=btn;
+    const u=new SpeechSynthesisUtterance(text);
+    u.lang=LANGS[lk]?.vl||"en-US";u.rate=.9;
+    if(btn){
+      btn.classList.add("playing");btn.innerHTML="⏹ Stop";
+      u.onend=u.onerror=()=>{btn.classList.remove("playing");btn.innerHTML="🔊 Play";this._current=null;};
+    }
+    this._s.speak(u);
+  }
+};
+
+/* ════════ AUTH SERVICE ════════ */
+const Auth={
+  _a:null,
+  init(app){
+    this._a=app.auth();
+    this._a.onAuthStateChanged(async u=>{
+      S.user=u;S._load();
+      // update plan button
+      const pb=document.getElementById("plan-btn");
+      if(pb){pb.textContent=S.plan==="pro"?"⭐ Pro":"Free";pb.className="plan-btn "+(S.plan==="pro"?"plan-pro":"plan-free");}
+      UI.all();
+    });
+  },
+  async google(){
+    try{
+      document.getElementById("merr").textContent="";
+      await this._a.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+      UI.closeModal();UI.toast("Welcome, "+S.user.displayName.split(" ")[0]+"! 🎉");
+    }catch(e){document.getElementById("merr").textContent="Error: "+e.message;}
+  },
+  async out(){
+    if(this._a)await this._a.signOut();
+    S.user=null;S.init();UI.all();UI.toast("Signed out");
+  }
+};
+
+/* ════════ LEADERBOARD SERVICE ════════ */
+const LB={
+  _cache:[],_loaded:false,
+  async load(){
+    if(!S._db)return this._fake();
+    try{
+      const snap=await S._db.collection("users").orderBy("xp","desc").limit(20).get();
+      this._cache=[];
+      snap.forEach(doc=>{
+        const d=doc.data();
+        this._cache.push({uid:doc.id,name:d.displayName||"Anonymous",xp:d.xp||0,streak:d.streak||0,photo:d.photoURL||"",plan:d.plan||"free"});
+      });
+      this._loaded=true;
+      return this._cache;
+    }catch(e){return this._fake();}
+  },
+  _fake(){
+    const uname=S.user?.displayName?.split(" ")[0]||"You";
+    return[
+      {uid:"a1",name:"Amara K.",   xp:S.xp+310,streak:17,photo:"",plan:"pro"},
+      {uid:"a2",name:"Kofi M.",    xp:S.xp+200,streak:11,photo:"",plan:"free"},
+      {uid:"a3",name:"Fatima S.",  xp:S.xp+130,streak:24,photo:"",plan:"pro"},
+      {uid:S.user?.uid||"me",name:uname,xp:S.xp,streak:S.streak,photo:S.user?.photoURL||"",plan:S.plan,me:true},
+      {uid:"a4",name:"David O.",   xp:Math.max(0,S.xp-80), streak:3,photo:"",plan:"free"},
+      {uid:"a5",name:"Grace T.",   xp:Math.max(0,S.xp-150),streak:1,photo:"",plan:"free"},
+    ].sort((a,b)=>b.xp-a.xp);
+  }
+};
+
+/* ════════ UI SERVICE ════════ */
+const UI={
+  toast(msg,err=false){
+    const el=document.getElementById("toast");
+    el.textContent=msg;el.style.background=err?"var(--red)":"var(--surf)";el.style.color=err?"#fff":"var(--text)";
+    el.classList.add("show");setTimeout(()=>el.classList.remove("show"),2800);
+  },
+  openModal(){document.getElementById("modal").style.display="flex";},
+  closeModal(){document.getElementById("modal").style.display="none";},
+  t(){const t=new Date();return t.getHours()+":"+String(t.getMinutes()).padStart(2,"0");},
+  dateLbl(iso){
+    try{
+      const d=new Date(iso),n=new Date(),y=new Date(Date.now()-86400000);
+      if(d.toDateString()===n.toDateString())return"Today";
+      if(d.toDateString()===y.toDateString())return"Yesterday";
+      return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+    }catch{return"Recently";}
+  },
+  theme(){S.dark=!S.dark;document.body.classList.toggle("light",!S.dark);this.topbar();},
+  all(){this.topbar();this.sidebar();this.main();},
+
+  topbar(){
+    const el=document.getElementById("tr");
+    const pb=document.getElementById("plan-btn");
+    if(pb){pb.textContent=S.plan==="pro"?"⭐ Pro":"Free";pb.className="plan-btn "+(S.plan==="pro"?"plan-pro":"plan-free");}
+    if(!S.geminiKey){el.innerHTML="";return;}
+    const th=`<button class="pill" onclick="UI.theme()">${S.dark?"☀":"🌙"}</button>`;
+    const xp=`<span class="xp-pill">⭐${S.xp}</span>`;
+    const st=`<span class="st-pill">🔥${S.streak}</span>`;
+    if(S.user){
+      const init=(S.user.displayName||"U").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+      el.innerHTML=`${xp}${st}${th}<div class="uchip" onclick="App.go('profile')"><div class="uav">${S.user.photoURL?`<img src="${S.user.photoURL}"/>`:`${init}`}</div><span style="font-size:11px;font-weight:500">${S.user.displayName?.split(" ")[0]||"User"}</span></div>`;
+    }else{
+      el.innerHTML=`${xp}${st}${th}<button class="nudge" onclick="UI.openModal()">Sign in to save</button>`;
+    }
+  },
+
+  sidebar(){
+    const sb=document.getElementById("sidebar");
+    if(S.screen==="home"||S.screen==="history"||S.screen==="profile"||S.screen==="plans"){
+      sb.innerHTML=this._homeSB();
+    }else{
+      sb.innerHTML=this._langSB();
+    }
+  },
+
+  _homeSB(){
+    return`
+      <div class="sb-sec">Languages</div>
+      <div class="lang-list">${Object.entries(LANGS).map(([k,v])=>`
+        <div class="lang-card${S.lang===k&&S.screen==="lang"?" active":""}" onclick="App.enterLang('${k}')">
+          <span class="lc-flag">${v.flag}</span>
+          <div class="lc-info"><div class="lc-name">${v.name}</div><div class="lc-sub">${v.sub}</div></div>
+          <span class="lc-arr">›</span>
+          ${(S.progress[k]?.done||[]).length>0?`<span class="lc-lvl">${S.lvl(k)}</span>`:""}
+        </div>`).join("")}</div>
+      <div class="sb-div"></div>
+      <button class="sb-link${S.screen==="history"?" active":""}" onclick="App.go('history')">
+        <svg viewBox="0 0 24 24"><path d="M13 3a9 9 0 0 0-9 9H1l3.89 3.89.07.14L9 12H6c0-3.87 3.13-7 7-7s7 3.13 7 7-3.13 7-7 7c-1.93 0-3.68-.79-4.94-2.06l-1.42 1.42A8.954 8.954 0 0 0 13 21a9 9 0 0 0 0-18zm-1 5v5l4.28 2.54.72-1.21-3.5-2.08V8H12z"/></svg>History
+      </button>
+      <button class="sb-link${S.screen==="profile"?" active":""}" onclick="App.go('profile')">
+        <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>Profile
+      </button>
+      <div style="padding:7px"></div>`;
+  },
+
+  _langSB(){
+    const lk=S.lang;const l=LANGS[lk];const p=S.progress[lk];
+    const tabs=[
+      {id:"chat",     label:"Chat",      d:"M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"},
+      {id:"phrases",  label:"Phrases",   d:"M9 21c0 .55.45 1 1 1h4c.55 0 1-.45 1-1v-1H9v1zm3-19C8.14 2 5 5.14 5 9c0 2.38 1.19 4.47 3 5.74V17c0 .55.45 1 1 1h6c.55 0 1-.45 1-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.86-3.14-7-7-7z"},
+      {id:"translate",label:"Translate", d:"M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"},
+      {id:"lessons",  label:"Lessons",   d:"M12 3L1 9l11 6 9-4.91V17h2V9L12 3zM5 13.18v4L12 21l7-3.82v-4L12 17l-7-3.82z"},
+      {id:"ranks",    label:"Ranks",     d:"M7.5 21H2V9h5.5v12zm7.25-18h-5.5v18h5.5V3zM22 11h-5.5v10H22V11z"},
+    ];
+    return`
+      <div class="lsh">
+        <div class="lsh-back" onclick="App.goHome()">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
+          All languages
+        </div>
+        <div class="lsh-lang"><span class="lsh-flag">${l.flag}</span>
+          <div><div class="lsh-name">${l.name}</div><div class="lsh-lvl">${S.lvl(lk)} · ${S.pct(lk)}% done</div></div>
+        </div>
+        <div class="lsh-bar"><div class="lsh-fill" style="width:${S.pct(lk)}%"></div></div>
+      </div>
+      <div class="lnav">${tabs.map(t=>`
+        <button class="ltab${S.ltab===t.id?" active":""}" onclick="App.ltab('${t.id}')">
+          <svg viewBox="0 0 24 24"><path d="${t.d}"/></svg>${t.label}
+          ${t.id==="lessons"?`<span class="tag">${(p?.done||[]).length}/5</span>`:""}
+        </button>`).join("")}
+      </div>`;
+  },
+
+  main(){
+    const m=document.getElementById("main");
+    if(!S.geminiKey){S.geminiKey='AIzaSyDOa8pzBBaKbtwGDNlChS9jVHU2lBDN1kM';}
+    if(S.screen==="home")    {m.innerHTML=this._home();return;}
+    if(S.screen==="history") {m.innerHTML=this._history();return;}
+    if(S.screen==="profile") {m.innerHTML=this._profile();return;}
+    if(S.screen==="plans")   {m.innerHTML=this._plans();return;}
+    if(S.screen==="lang"){
+      const r={
+        chat:     ()=>this._chatRender(m),
+        phrases:  ()=>{m.innerHTML=this._phrases();},
+        translate:()=>{m.innerHTML=this._translate();},
+        lessons:  ()=>{m.innerHTML=this._lessons();},
+        ranks:    ()=>{m.innerHTML="<div class='inner'><div style='font-size:13px;color:var(--muted);text-align:center;padding:20px'>Loading leaderboard...</div></div>";this._ranksLoad();}
+      };
+      (r[S.ltab]||r.chat)();
+    }
+  },
+
+  _setup(){
+    document.getElementById("main").innerHTML=`
+      <div class="setup">
+        <div style="font-size:36px">🔑</div>
+        <div style="font-size:15px;font-weight:700">Enter your free Gemini API key</div>
+        <div style="font-size:12px;color:var(--muted);max-width:280px;line-height:1.6">Google Gemini 2.5 Flash — 100% free, no credit card.</div>
+        <div class="s-steps">
+          <div class="s-step"><span>1.</span><span>Go to <b>aistudio.google.com</b></span></div>
+          <div class="s-step"><span>2.</span><span>Sign in with your <b>Google account</b></span></div>
+          <div class="s-step"><span>3.</span><span>Click <b>"Get API key"</b> → Create</span></div>
+          <div class="s-step"><span>4.</span><span>Copy and paste below</span></div>
+        </div>
+        <a href="https://aistudio.google.com/app/apikey" target="_blank" style="font-size:11px;color:var(--accent)">→ Open Google AI Studio (free)</a>
+        <input class="s-inp" id="kf" type="password" placeholder="Paste Gemini API key..." value="${S.geminiKey}"/>
+        <button class="s-btn" onclick="App.saveKey()">Save & Start Learning 🚀</button>
+        <div class="err" id="kerr"></div>
+      </div>`;
+  },
+
+  /* HOME */
+  _home(){
+    const hr=new Date().getHours();
+    const gStr=hr<12?"Good morning":hr<17?"Good afternoon":"Good evening";
+    const name=S.user?S.user.displayName?.split(" ")[0]:"Friend";
+    const activeLangs=Object.keys(LANGS).filter(k=>(S.progress[k]?.done||[]).length>0||S.msgs(k)>0);
+    return`<div class="home-screen">
+      <div class="home-hero">
+        <div class="hh-top">
+          <div><div class="hh-g">${gStr}, ${name}! 👋</div><div class="hh-s">Keep your streak going today</div></div>
+          <div class="hh-st"><div class="hh-f">🔥</div><div class="hh-n">${S.streak}</div><div class="hh-l">day streak</div></div>
+        </div>
+        <div class="hh-stats">
+          <div class="hh-stat"><div class="hh-sn">${S.xp}</div><div class="hh-sl">Total XP</div></div>
+          <div class="hh-stat"><div class="hh-sn">${S.allLessons()}</div><div class="hh-sl">Lessons</div></div>
+          <div class="hh-stat"><div class="hh-sn">${S.allMsgs()}</div><div class="hh-sl">Messages</div></div>
+        </div>
+      </div>
+      <div class="h-sec">Tap a language to start →</div>
+      ${activeLangs.length?`
+        <div class="h-sec">Your progress</div>
+        ${activeLangs.map(k=>`
+          <div class="prog-card" onclick="App.enterLang('${k}')">
+            <div style="display:flex;align-items:center;gap:9px">
+              <span style="font-size:20px">${LANGS[k].flag}</span>
+              <div style="flex:1">
+                <div style="font-size:13px;font-weight:600">${LANGS[k].name}</div>
+                <div style="font-size:10px;color:var(--muted)">${S.lvl(k)} · ${(S.progress[k]?.done||[]).length}/5 lessons</div>
+                <div class="prog-bar"><div class="prog-fill" style="width:${S.pct(k)}%"></div></div>
+              </div>
+              <span style="font-size:16px;color:var(--muted)">›</span>
+            </div>
+          </div>`).join("")}`:""}
+    </div>`;
+  },
+
+  /* CHAT */
+  _chatRender(m){
+    m.innerHTML=`
+      <div class="chat-hdr">
+        <div class="ch-av">${LANGS[S.lang].flag}</div>
+        <div><div class="ch-name">${LANGS[S.lang].name} Assistant</div><div class="ch-st"><span class="dot"></span>Online · Gemini 2.5 Flash</div></div>
+      </div>
+      <div class="chat-area" id="ca"></div>
+      <div class="vbar" id="vbar"><div class="vdot"></div>Listening... tap mic again to stop</div>
+      <div class="input-area">
+        <button class="mic-btn" id="mic" onclick="App.toggleVoice()">🎙</button>
+        <input class="msg-input" id="inp" placeholder="Message in ${LANGS[S.lang].name} or English..." autocomplete="off"/>
+        <button class="send-btn" id="sbtn" onclick="App.send()">➤</button>
+      </div>`;
+    this._msgs();
+    this._chatEvents();
+  },
+
+  _chatEvents(){
+    setTimeout(()=>{
+      const i=document.getElementById("inp");
+      if(i)i.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();App.send();}});
+    },50);
+  },
+
+  _msgs(){
+    const ca=document.getElementById("ca");if(!ca)return;
+    const hist=S.histories[S.lang]||[];
+    if(!hist.length){
+      ca.innerHTML=`<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex:1;gap:8px;padding:20px;text-align:center">
+        <div style="font-size:42px">${LANGS[S.lang].flag}</div>
+        <div style="font-size:16px;font-weight:600">Chat in ${LANGS[S.lang].name}</div>
+        <div style="font-size:12px;color:var(--muted);max-width:220px;line-height:1.6">Ask anything — health, farming, business, or just practice your language.</div>
+        <div style="font-size:11px;color:var(--muted);background:var(--surf2);border:1px solid var(--border);padding:5px 12px;border-radius:var(--rf);margin-top:4px">🎙 Tap mic to speak · 🔊 Tap Play to hear · ⏹ Tap Stop to silence</div>
+      </div>`;
+      return;
+    }
+    ca.innerHTML=hist.map((m,i)=>{
+      if(m.role==="user"){
+        return`<div class="msg-row user">
+          <div class="user-bubble">${m.content.replace(/</g,"&lt;")}</div>
+          <div class="msg-meta"><span class="msg-time">${m.time||""}</span></div>
+        </div>`;
+      }
+      const parsed=parseResponse(m.content);
+      return`<div class="msg-row bot">
+        <div class="bubble-wrap">
+          <div class="bubble-local">${parsed.local.replace(/</g,"&lt;")}</div>
+          ${parsed.en?`<div class="bubble-en">🇬🇧 ${parsed.en.replace(/</g,"&lt;")}</div>`:""}
+        </div>
+        <div class="msg-meta">
+          <span class="msg-time">${m.time||""}</span>
+          <button class="spk-btn" onclick="Voice.toggle('${parsed.local.replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${S.lang}',this)">🔊 Play</button>
+        </div>
+      </div>`;
+    }).join("");
+    ca.scrollTop=ca.scrollHeight;
+  },
+
+  showTyping(){
+    const ca=document.getElementById("ca");if(!ca)return;
+    this._msgs();
+    ca.innerHTML+=`<div class="msg-row bot"><div class="bubble-local" style="max-width:80px"><div class="typing"><span></span><span></span><span></span></div></div></div>`;
+    ca.scrollTop=ca.scrollHeight;
+  },
+
+  /* TRANSLATE */
+  _translate(){
+    const opts=Object.entries(LANGS).map(([k,v])=>`<option value="${k}">${v.flag} ${v.name}</option>`).join("");
+    const eng=`<option value="english">🇬🇧 English</option>`;
+    return`<div class="inner">
+      <div style="font-size:13px;font-weight:600">🔤 Translate</div>
+      <div class="card"><div class="clabel">From → To</div>
+        <div class="swap-row"><select class="tc-sel" id="fl">${eng}${opts}</select>
+        <button class="swap-btn" onclick="Trans.swap()">⇄</button>
+        <select class="tc-sel" id="tl">${opts}${eng}</select></div>
+      </div>
+      <div class="card"><div class="clabel">Your text</div><textarea class="tc-ta" id="ti" placeholder="Type text to translate..."></textarea></div>
+      <button class="act-btn" id="tbtn" onclick="Trans.go()">Translate now</button>
+      <div class="card"><div class="clabel">Translation</div><div class="res-box" id="tres" style="font-style:italic;color:var(--muted)">Translation appears here...</div></div>
+    </div>`;
+  },
+
+  /* PHRASES */
+  _phrases(){
+    const l=LANGS[S.lang];
+    const cards=S.phrases.length
+      ?S.phrases.map(p=>`<div class="phrase-card" onclick="App.usePhrase(this.dataset.e)" data-e="${(p.english||"").replace(/"/g,"&quot;")}">
+          <div class="pc-en">${p.english||""}</div><div class="pc-lo">${p.local||""}</div>
+          ${p.pronunciation?`<div class="pc-pr">~ ${p.pronunciation}</div>`:""}
+          <button class="spk-btn" style="margin-top:7px" onclick="event.stopPropagation();Voice.toggle('${(p.local||"").replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${S.lang}',this)">🔊 Play</button>
+        </div>`).join("")
+      :`<div style="text-align:center;padding:26px;font-size:12px;color:var(--muted)">Generate ${l.name} phrases to practice. Tap any to use in chat.</div>`;
+    return`<div class="inner">
+      <div style="font-size:13px;font-weight:600">${l.flag} ${l.name} Phrases</div>
+      <div id="pc">${cards}</div>
+      <button class="dashed" id="gbtn" onclick="Phrases.gen()">+ Generate ${l.name} phrases</button>
+    </div>`;
+  },
+
+  /* LESSONS — includes Goals section */
+  _lessons(){
+    const lk=S.lang;const p=S.progress[lk];const l=LANGS[lk];
+    const goalsHTML=this._goalsHTML(lk);
+    return`<div class="inner">
+      <!-- PROGRESS HEADER -->
+      <div style="display:flex;align-items:center;gap:9px">
+        <span style="font-size:20px">${l.flag}</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:700">${l.name} Lessons</div>
+          <div style="font-size:10px;color:var(--muted)">${S.lvl(lk)} · ${(p.done||[]).length}/5 complete</div>
+        </div>
+        <div class="prog-bar" style="flex:1"><div class="prog-fill" style="width:${S.pct(lk)}%"></div></div>
+      </div>
+      <!-- LESSONS -->
+      ${TOPICS.map((topic,i)=>{
+        const done=(p.done||[]).includes(i);
+        const unlocked=!done&&(i===0||(p.done||[]).includes(i-1));
+        const locked=!done&&!unlocked;
+        return`<div class="lesson-card${done?" done":unlocked?" unlocked":locked?" locked":""}" onclick="${locked?"UI.toast('Complete the previous lesson first ☝')":"App.startLesson("+i+")"}">
+          <div class="ln">${done?"✓":i+1}</div>
+          <div class="lb"><div class="lt">${topic}</div><div class="ls">${LEVELS[p.level||0]} · 5 phrases + quiz</div></div>
+          <div class="lxp">+${CFG.xpLesson} XP</div>
+        </div>`;}).join("")}
+      <!-- GOALS SECTION -->
+      ${goalsHTML}
+    </div>`;
+  },
+
+  _goalsHTML(lk){
+    const myGoals=S.selectedGoals.map(id=>ALL_GOALS.find(g=>g.id===id)).filter(Boolean);
+    const C=44;const R=18;const circ=2*Math.PI*R;
+    const cards=myGoals.map(g=>{
+      const pr=S.goalProgress(g.id,lk);
+      const offset=circ*(1-pr.pct/100);
+      return`<div class="goal-item${pr.done?" done":""}">
+        <div class="gi-ring${pr.done?" done":""}">
+          <svg viewBox="0 0 44 44">
+            <circle class="track" cx="22" cy="22" r="${R}"/>
+            <circle class="fill" cx="22" cy="22" r="${R}" stroke-dasharray="${circ}" stroke-dashoffset="${offset}"/>
+          </svg>
+          <div class="gi-center">${pr.done?"✓":`${pr.val}<span style="font-size:8px">/${pr.max}</span>`}</div>
+        </div>
+        <div class="gi-body">
+          <div class="gi-title">${g.ico} ${g.title}</div>
+          <div class="gi-sub">${g.sub}</div>
+          <div class="gi-xp">+${g.xp} XP${pr.done?" · Earned!":` · ${pr.pct}%`}</div>
+        </div>
+        <div class="gi-sel">${pr.done?"✅":"Active"}</div>
+      </div>`;}).join("");
+    const picker=S.showGoalPicker?`
+      <div class="goal-picker">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px">Choose your goals</div>
+        ${ALL_GOALS.map(g=>`<div class="gp-item${S.selectedGoals.includes(g.id)?" picked":""}" onclick="App.toggleGoal('${g.id}')">
+          <div class="gp-ico">${g.ico}</div>
+          <div><div class="gp-t">${g.title}</div><div class="gp-s">${g.sub}</div></div>
+          <div class="gp-xp">+${g.xp} XP</div>
+        </div>`).join("")}
+        <button class="act-btn" style="margin-top:4px" onclick="App.closeGoalPicker()">Done ✓</button>
+      </div>`:"";
+    return`
+      <div style="font-size:10px;font-weight:700;color:var(--muted);letter-spacing:.7px;text-transform:uppercase;margin-top:6px;display:flex;align-items:center;justify-content:space-between">
+        Today's Goals
+        <button style="font-size:10px;color:var(--accent);background:none;border:none;cursor:pointer;font-weight:600" onclick="App.openGoalPicker()">+ Set goals</button>
+      </div>
+      <div class="goals-section">${cards}</div>
+      ${picker}`;
+  },
+
+  /* RANKS — real leaderboard */
+  async _ranksLoad(){
+    const data=await LB.load();
+    const medals=["🥇","🥈","🥉"];
+    const myUid=S.user?.uid||"";
+    document.getElementById("main").innerHTML=`<div class="inner">
+      <div style="font-size:13px;font-weight:600">🏆 Global Leaderboard</div>
+      <div style="font-size:11px;color:var(--muted)">${S._db&&S.user?"Live rankings · Updated in real time":"Sign in to appear on the real leaderboard"}</div>
+      <div class="card">${data.map((r,i)=>{
+        const isMe=r.uid===myUid||r.me;
+        return`<div class="lb-row${isMe?" me":""}">
+          <div class="lb-rank">${medals[i]||i+1}</div>
+          <div class="lb-av">${r.photo?`<img src="${r.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%"/>`:`<span style="font-size:14px">👤</span>`}</div>
+          <div class="lb-name">${r.name}${isMe?" (You)":""}${r.plan==="pro"?` <span style="font-size:9px;background:linear-gradient(135deg,#a855f7,#6366f1);color:#fff;padding:1px 5px;border-radius:var(--rf)">PRO</span>`:""}</div>
+          <div class="lb-st">🔥${r.streak}</div>
+          <div class="lb-xp">${r.xp} XP</div>
+        </div>`;}).join("")}</div>
+      ${!S.user?`<button class="act-btn" onclick="UI.openModal()">Sign in to join the leaderboard</button>`:""}
+      <div style="font-size:11px;color:var(--muted);text-align:center">Earn XP by completing lessons and chatting daily!</div>
+    </div>`;
+  },
+
+  /* PLANS */
+  _plans(){
+    return`<div class="plans-screen">
+      <div style="font-size:15px;font-weight:700;text-align:center">Choose your plan</div>
+      <div style="font-size:12px;color:var(--muted);text-align:center;margin-top:-4px">Unlock the full AfriSpeak experience</div>
+      <!-- FREE -->
+      <div class="plan-card">
+        <div class="plan-name">Free</div>
+        <div class="plan-price">$0<span>/forever</span></div>
+        <div class="plan-desc">${PLANS.free.desc}</div>
+        <div class="plan-features">${PLANS.free.features.map(f=>`<div class="pf${f.ok?"":" locked"}"><span class="pf-ico">${f.ico}</span>${f.text}</div>`).join("")}</div>
+        <button class="plan-btn free" onclick="UI.toast('You are on the Free plan')">${S.plan==="free"?"✓ Current plan":"Switch to Free"}</button>
+      </div>
+      <!-- PRO -->
+      <div class="plan-card pro">
+        <div class="plan-popular">Most Popular</div>
+        <div class="plan-name">⭐ Pro</div>
+        <div class="plan-price">$4.99<span>/month</span></div>
+        <div class="plan-desc">${PLANS.pro.desc}</div>
+        <div class="plan-features">${PLANS.pro.features.map(f=>`<div class="pf"><span class="pf-ico">${f.ico}</span>${f.text}</div>`).join("")}</div>
+        <button class="plan-btn pro" onclick="App.upgradePro()">${S.plan==="pro"?"✓ You are Pro — Thank you!":"Upgrade to Pro →"}</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);text-align:center">Cancel anytime · Secure payment · Support African language preservation</div>
+    </div>`;
+  },
+
+  /* HISTORY */
+  _history(){
+    if(!S.user)return`<div class="empty"><div class="empty-ico">🔒</div><div class="empty-t">Sign in to view history</div><div class="empty-s">Your activity is saved when you sign in.</div><button class="lock-btn" onclick="UI.openModal()">Sign in with Google</button></div>`;
+    const entries=[];const now=new Date().toISOString();
+    Object.entries(S.histories).forEach(([lk,msgs])=>{
+      if(!msgs.length)return;
+      const last=msgs[msgs.length-1];
+      const prev=msgs.filter(m=>m.role==="user").slice(-1)[0]?.content?.slice(0,48)||"";
+      entries.push({ico:LANGS[lk].flag,t:`${LANGS[lk].name} Chat`,s:prev,time:last.time||"",date:last.date||now,lk,type:"chat"});
+    });
+    S.transHistory.slice(0,8).forEach(h=>entries.push({ico:"🔤",t:"Translation",s:`${h.fromName}→${h.toName}: "${(h.original||"").slice(0,28)}"`,time:h.time||"",date:h.date||now,type:"t"}));
+    if(!entries.length)return`<div class="empty"><div class="empty-ico">📋</div><div class="empty-t">No history yet</div><div class="empty-s">Chat or translate — activity appears here by date.</div></div>`;
+    const grouped={};
+    entries.sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(e=>{const l=this.dateLbl(e.date);if(!grouped[l])grouped[l]=[];grouped[l].push(e);});
+    return`<div class="scr-full">${Object.entries(grouped).map(([date,items])=>`
+      <div class="hdate">${date}</div>
+      ${items.map(item=>`<div class="hitem" onclick="${item.type==="chat"?`App.enterLang('${item.lk||""}')`:""}" >
+        <div class="hi-ico">${item.ico}</div>
+        <div class="hi-b"><div class="hi-t">${item.t}</div><div class="hi-s">${item.s}</div></div>
+        <div class="hi-time">${item.time}</div>
+      </div>`).join("")}`).join("")}</div>`;
+  },
+
+  /* PROFILE */
+  _profile(){
+    if(!S.user)return`<div class="empty"><div class="empty-ico">👤</div><div class="empty-t">Sign in to view profile</div><button class="lock-btn" onclick="UI.openModal()" style="margin-top:8px">Sign in with Google</button></div>`;
+    const init=(S.user.displayName||"U").split(" ").map(w=>w[0]).join("").slice(0,2).toUpperCase();
+    return`<div class="scr-full">
+      <div class="prof-top">
+        ${S.user.photoURL?`<img class="prof-pic" src="${S.user.photoURL}"/>`:`<div class="prof-init">${init}</div>`}
+        <div style="font-size:17px;font-weight:700">${S.user.displayName||"User"}</div>
+        <div style="font-size:12px;color:var(--muted)">${S.user.email}</div>
+        <div style="font-size:11px;background:${S.plan==="pro"?"linear-gradient(135deg,#a855f7,#6366f1)":"var(--surf2)"};color:${S.plan==="pro"?"#fff":"var(--muted)"};padding:4px 12px;border-radius:var(--rf);font-weight:700">${S.plan==="pro"?"⭐ Pro Plan":"Free Plan"}</div>
+        <div class="stat-row">
+          <div class="stat-c"><div class="stat-n">${S.xp}</div><div class="stat-l">Total XP</div></div>
+          <div class="stat-c"><div class="stat-n">${S.streak}</div><div class="stat-l">Streak</div></div>
+          <div class="stat-c"><div class="stat-n">${S.allLessons()}</div><div class="stat-l">Lessons</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="pref-row"><span class="pref-l">Messages sent</span><span class="pref-v">${S.allMsgs()}</span></div>
+        <div class="pref-row"><span class="pref-l">Translations</span><span class="pref-v">${S.transHistory.length}</span></div>
+        <div class="pref-row"><span class="pref-l">AI Model</span><span class="pref-v">Gemini 2.5 Flash ✓</span></div>
+        <div class="pref-row"><span class="pref-l">Theme</span><span class="pref-v">${S.dark?"Dark 🌙":"Light ☀"}</span></div>
+      </div>
+      ${S.plan==="free"?`<button class="act-btn" onclick="App.go('plans')">Upgrade to Pro ⭐</button>`:""}
+      <button class="so-btn" onclick="Auth.out()">Sign out</button>
+    </div>`;
+  },
+
+  /* QUIZ */
+  showQuiz(questions,lessonIdx){
+    S.quiz={questions,cur:0,score:0,lessonIdx,answered:false};
+    this._quizQ();
+  },
+  _quizQ(){
+    const m=document.getElementById("main");
+    const q=S.quiz;const cur=q.questions[q.cur];const total=q.questions.length;
+    m.innerHTML=`<div class="quiz-shell">
+      <div class="qtop">
+        <div class="qprog"><span class="qstep">Q${q.cur+1}/${total}</span>
+          <div class="qbar"><div class="qfill" style="width:${(q.cur/total)*100}%"></div></div>
+          <span class="qsc">${q.score}/${q.cur}</span>
+        </div>
+      </div>
+      <div class="qbody">
+        <div class="qq">${cur.question}</div>
+        <div class="qsub">${cur.type==="mcq"?"Choose the correct answer":"Type your answer below"}</div>
+        ${cur.type==="mcq"
+          ?`<div class="qopts">${(cur.options||[]).map(o=>`<button class="qopt" onclick="Quiz.ans('${o.replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${(cur.answer||"").replace(/'/g,"\\'").replace(/"/g,"&quot;")}')"> ${o}</button>`).join("")}</div>`
+          :`<div style="display:flex;flex-direction:column;gap:8px">
+              <input class="qinp" id="qinp" placeholder="Type your answer..." autocomplete="off" onkeydown="if(event.key==='Enter')Quiz.check()"/>
+              <button class="act-btn" onclick="Quiz.check()">Check answer</button>
+            </div>`}
+        <div id="qfb"></div>
+      </div>
+    </div>`;
+    if(cur.type==="type")setTimeout(()=>document.getElementById("qinp")?.focus(),80);
+  },
+  showQuizResult(score,total,lessonIdx){
+    const pct=Math.round((score/total)*100);const pass=pct>=60;
+    const icon=pct===100?"🏆":pct>=80?"⭐":pct>=60?"✅":"💪";
+    const xpEarned=pct===100?CFG.xpPerfect:pass?CFG.xpQuizPass:5;
+    if(pass){
+      S.doneLesson(S.lang,lessonIdx);
+      localStorage.setItem("as_qt_"+new Date().toDateString(),"1");
+    }
+    if(pct===100){S.perfectCnt++;localStorage.setItem("as_qp_"+new Date().toDateString(),"1");S.save();}
+    S.addXP(xpEarned);
+    document.getElementById("main").innerHTML=`<div class="qresult">
+      <div class="qr-ico">${icon}</div>
+      <div class="qr-t">${pct===100?"Perfect!":pass?"Lesson passed!":"Keep going!"}</div>
+      <div class="qr-s">${score}/${total} correct · ${pct}%<br>${pass?"Next lesson unlocked! 🎉":"Score 60%+ to pass."}</div>
+      <div class="qr-xp">+${xpEarned} XP earned</div>
+      <div class="qr-btns">
+        <button class="qr-btn p" onclick="App.ltab('lessons')">Back to lessons</button>
+        ${!pass?`<button class="qr-btn s" onclick="App.startLesson(${lessonIdx})">Try again</button>`:""}
+        <button class="qr-btn s" onclick="App.ltab('chat')">Go to chat</button>
+      </div>
+    </div>`;
+  }
+};
+
+/* ════════ QUIZ CONTROLLER ════════ */
+const Quiz={
+  ans(chosen,correct){
+    if(S.quiz.answered)return;S.quiz.answered=true;
+    const ok=chosen.trim().toLowerCase()===correct.trim().toLowerCase();
+    if(ok)S.quiz.score++;
+    document.querySelectorAll(".qopt").forEach(b=>{
+      b.disabled=true;
+      if(b.textContent.trim()===correct.trim())b.classList.add("ok");
+      else if(b.textContent.trim()===chosen.trim()&&!ok)b.classList.add("no");
+    });
+    this._fb(ok,correct);
+  },
+  check(){
+    if(S.quiz.answered)return;
+    const inp=document.getElementById("qinp");if(!inp)return;
+    const val=inp.value.trim();const correct=S.quiz.questions[S.quiz.cur].answer;
+    const ok=val.toLowerCase()===correct.toLowerCase();
+    if(ok)S.quiz.score++;S.quiz.answered=true;inp.disabled=true;this._fb(ok,correct);
+  },
+  _fb(ok,correct){
+    const fb=document.getElementById("qfb");if(!fb)return;
+    fb.innerHTML=`<div class="qfb ${ok?"ok":"no"}">${ok?"✅ Correct! Well done!":"❌ Answer: <strong>"+correct+"</strong>"}</div>
+      <button class="qnext" onclick="Quiz.next()">${S.quiz.cur+1<S.quiz.questions.length?"Next →":"See results 🎉"}</button>`;
+  },
+  next(){
+    S.quiz.answered=false;S.quiz.cur++;
+    if(S.quiz.cur>=S.quiz.questions.length)UI.showQuizResult(S.quiz.score,S.quiz.questions.length,S.quiz.lessonIdx);
+    else UI._quizQ();
+  }
+};
+
+/* ════════ APP CONTROLLER ════════ */
+const App={
+
+  toggleSidebar(){
+    const sb=document.getElementById("sidebar");
+    const ov=document.getElementById("sb-overlay");
+    const isOpen=sb.classList.contains("open");
+    if(isOpen){this.closeSidebar();}
+    else{sb.classList.add("open");ov.classList.add("show");}
+  },
+  closeSidebar(){
+    document.getElementById("sidebar")?.classList.remove("open");
+    document.getElementById("sb-overlay")?.classList.remove("show");
+  },
+  _afterNav(){
+    // auto-close sidebar on mobile after navigation
+    if(window.innerWidth<=640) this.closeSidebar();
+  },
+  go(screen){S.screen=screen;S.lang=null;UI.all();this._afterNav();},
+  goHome(){S.screen="home";S.lang=null;UI.all();this._afterNav();},
+  enterLang(lk){S.lang=lk;S.screen="lang";S.ltab="chat";S.phrases=[];UI.all();this._afterNav();},
+  ltab(t){S.ltab=t;UI.sidebar();UI.main();this._afterNav();},
+  saveKey(){
+    const v=document.getElementById("kf")?.value.trim();
+    if(!v){document.getElementById("kerr").textContent="Please paste your API key.";return;}
+    if(v.length<20){document.getElementById("kerr").textContent="Key seems too short.";return;}
+    S.geminiKey=v;localStorage.setItem("as_k",v);S.screen="home";UI.all();
+  },
+  usePhrase(phrase){S.ltab="chat";UI.sidebar();UI.main();setTimeout(()=>{const i=document.getElementById("inp");if(i){i.value=phrase;i.focus();}},100);},
+  toggleVoice(){
+    const mic=document.getElementById("mic");const bar=document.getElementById("vbar");
+    if(S.isRec){Voice.stop();S.isRec=false;mic?.classList.remove("rec");bar?.classList.remove("on");}
+    else{
+      S.isRec=true;mic?.classList.add("rec");bar?.classList.add("on");S.voiceCnt++;S.save();
+      Voice.start(S.lang,text=>{const i=document.getElementById("inp");if(i)i.value=text;},
+        ()=>{S.isRec=false;document.getElementById("mic")?.classList.remove("rec");document.getElementById("vbar")?.classList.remove("on");});
+    }
+  },
+  async send(){
+    const inp=document.getElementById("inp");const btn=document.getElementById("sbtn");
+    const text=inp?.value.trim();if(!text)return;
+    inp.value="";btn.disabled=true;
+    const hist=S.histories[S.lang];
+    hist.push({role:"user",content:text,time:UI.t(),date:new Date().toISOString()});
+    UI.showTyping();
+    try{
+      const reply=await AI.chat(hist,S.lang);
+      hist.push({role:"assistant",content:reply,time:UI.t(),date:new Date().toISOString()});
+      if(hist.length>CFG.maxMsgs)hist.splice(0,hist.length-CFG.maxMsgs);
+      S.save();UI._msgs();
+    }catch(e){
+      hist.push({role:"assistant",content:`[LOCAL]: Error\n[EN]: ${e.message}`,time:UI.t(),date:new Date().toISOString()});
+      UI._msgs();
+    }
+    btn.disabled=false;document.getElementById("inp")?.focus();
+  },
+  openGoalPicker(){S.showGoalPicker=true;UI.main();document.querySelector(".goal-picker")?.scrollIntoView({behavior:"smooth"});},
+  closeGoalPicker(){S.showGoalPicker=false;S.save();UI.main();},
+  toggleGoal(id){
+    if(S.selectedGoals.includes(id))S.selectedGoals=S.selectedGoals.filter(g=>g!==id);
+    else if(S.selectedGoals.length<5)S.selectedGoals.push(id);
+    else{UI.toast("Max 5 goals at a time",true);return;}
+    UI.main();
+  },
+  upgradePro(){
+    // In production connect to Stripe/mobile money here
+    S.plan="pro";S.save();
+    const pb=document.getElementById("plan-btn");
+    if(pb){pb.textContent="⭐ Pro";pb.className="plan-btn plan-pro";}
+    UI.toast("Welcome to Pro! 🎉");UI.main();
+  },
+  async startLesson(idx){
+    const m=document.getElementById("main");
+    m.innerHTML=`<div class="empty"><div class="empty-ico">📚</div><div class="empty-t">Loading lesson ${idx+1}...</div><div class="empty-s">Generating with Gemini AI</div></div>`;
+    try{
+      const data=await AI.lesson(LANGS[S.lang].name,idx+1,S.lvl(S.lang));
+      S.curLesson={...data,idx};
+      m.innerHTML=`<div class="inner">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <div><div style="font-size:14px;font-weight:700">Lesson ${idx+1}: ${data.topic}</div>
+          <div style="font-size:10px;color:var(--muted)">${LANGS[S.lang].name} · ${S.lvl(S.lang)}</div></div>
+          <button class="act-btn" style="width:auto;padding:8px 15px;font-size:12px" onclick="App.startQuiz(${idx})">Take Quiz →</button>
+        </div>
+        ${(data.phrases||[]).map(p=>`
+          <div class="phrase-card">
+            <div class="pc-en">${p.english||""}</div>
+            <div class="pc-lo">${p.local||""}</div>
+            ${p.pronunciation?`<div class="pc-pr">~ ${p.pronunciation}</div>`:""}
+            <button class="spk-btn" style="margin-top:7px" onclick="Voice.toggle('${(p.local||"").replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${S.lang}',this)">🔊 Play</button>
+          </div>`).join("")}
+        ${data.culturalNote?`<div class="card" style="border-color:var(--accent)"><div class="clabel">Cultural Note</div><div style="font-size:12px;line-height:1.65">${data.culturalNote}</div></div>`:""}
+        <button class="act-btn" onclick="App.startQuiz(${idx})">Take quiz on this lesson →</button>
+      </div>`;
+    }catch(e){
+      m.innerHTML=`<div class="empty"><div class="empty-ico">⚠️</div><div class="empty-t">Failed to load</div><div class="empty-s">${e.message}</div><button class="lock-btn" onclick="App.ltab('lessons')">Go back</button></div>`;
+    }
+  },
+  async startQuiz(lessonIdx){
+    const m=document.getElementById("main");
+    m.innerHTML=`<div class="empty"><div class="empty-ico">🎯</div><div class="empty-t">Building your quiz...</div><div class="empty-s">Creating personalised questions</div></div>`;
+    try{
+      const data=S.curLesson||{phrases:[{english:"Hello",local:"Oli otya",pronunciation:"oh-lee oh-chah"}]};
+      const questions=await AI.quiz(LANGS[S.lang].name,data);
+      UI.showQuiz(questions,lessonIdx);
+    }catch(e){
+      m.innerHTML=`<div class="empty"><div class="empty-ico">⚠️</div><div class="empty-t">Failed to build quiz</div><div class="empty-s">${e.message}</div><button class="lock-btn" onclick="App.startLesson(${lessonIdx})">Back to lesson</button></div>`;
+    }
+  }
+};
+
+/* ════════ TRANSLATE / PHRASES ════════ */
+const Trans={
+  swap(){const f=document.getElementById("fl"),t=document.getElementById("tl"),tmp=f.value;f.value=t.value;t.value=tmp;},
+  async go(){
+    const from=document.getElementById("fl").value,to=document.getElementById("tl").value;
+    const text=document.getElementById("ti").value.trim();
+    const btn=document.getElementById("tbtn"),res=document.getElementById("tres");
+    if(!text)return;
+    btn.disabled=true;btn.textContent="Translating...";
+    res.style.fontStyle="italic";res.style.color="var(--muted)";res.textContent="Translating...";
+    const fn=from==="english"?"English":LANGS[from]?.name||from;
+    const tn=to==="english"?"English":LANGS[to]?.name||to;
+    try{
+      const reply=await AI.translate(text,fn,tn);
+      res.style.fontStyle="normal";res.style.color="var(--text)";res.textContent=reply;
+      S.transHistory.unshift({original:text,result:reply,fromName:fn,toName:tn,time:UI.t(),date:new Date().toISOString()});
+      if(S.transHistory.length>CFG.maxMsgs)S.transHistory=S.transHistory.slice(0,CFG.maxMsgs);
+      S.save();
+    }catch(e){res.style.color="var(--red)";res.textContent="Error: "+e.message;}
+    btn.disabled=false;btn.textContent="Translate now";
+  }
+};
+const Phrases={
+  async gen(){
+    const btn=document.getElementById("gbtn"),c=document.getElementById("pc");
+    btn.disabled=true;btn.textContent="Generating...";
+    c.innerHTML=`<div style="text-align:center;padding:26px;font-size:12px;color:var(--muted)">Loading...</div>`;
+    try{
+      S.phrases=await AI.phrases(LANGS[S.lang].name);
+      c.innerHTML=S.phrases.map(p=>`<div class="phrase-card" onclick="App.usePhrase(this.dataset.e)" data-e="${(p.english||"").replace(/"/g,"&quot;")}">
+        <div class="pc-en">${p.english||""}</div><div class="pc-lo">${p.local||""}</div>
+        ${p.pronunciation?`<div class="pc-pr">~ ${p.pronunciation}</div>`:""}
+        <button class="spk-btn" style="margin-top:6px" onclick="event.stopPropagation();Voice.toggle('${(p.local||"").replace(/'/g,"\\'").replace(/"/g,"&quot;")}','${S.lang}',this)">🔊 Play</button>
+      </div>`).join("");
+    }catch(e){c.innerHTML=`<div style="color:var(--red);font-size:12px;text-align:center;padding:18px">Error: ${e.message}</div>`;}
+    btn.disabled=false;btn.textContent="+ Generate new phrases";
+  }
+};
+
+/* ════════ BOOTSTRAP ════════ */
+(function(){
+  S.init();
+  let fb=false;
+  try{
+    if(CFG.firebase.apiKey&&!CFG.firebase.apiKey.includes("YOUR_")){
+      const app=firebase.initializeApp(CFG.firebase);
+      Auth.init(app);
+      // try Firestore for leaderboard — graceful fallback if billing not enabled
+      try{S._db=app.firestore();console.log("Firestore connected");}catch(e){console.warn("Firestore not available, using local mode");S._db=null;}
+      fb=true;
+    }
+  }catch(e){console.warn("Firebase:",e.message);}
+  if(!fb)UI.all();
+})();
+
+/* ════════ PWA ════════ */
+let _installPrompt = null;
+let _swReady = false;
+
+// Register service worker
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js', {scope: '/'})
+    .then(reg => {
+      _swReady = true;
+      console.log('[SW] registered', reg.scope);
+      navigator.serviceWorker.addEventListener('message', e => {
+        if (e.data?.type === 'SYNC_DATA') S.save();
+      });
+    })
+    .catch(e => console.warn('[SW] failed', e));
+}
+
+// Capture install prompt — fires when PWA criteria met
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  _installPrompt = e;
+  console.log('[PWA] install prompt captured');
+  // Show banner
+  if (!localStorage.getItem('as_pwa_ok')) {
+    setTimeout(() => document.getElementById('pwa-banner')?.classList.add('show'), 1500);
+  }
+  // Show install button in topbar
+  const ib = document.getElementById('install-top-btn');
+  if (ib) ib.style.display = 'flex';
+});
+
+window.addEventListener('appinstalled', () => {
+  _installPrompt = null;
+  document.getElementById('pwa-banner')?.classList.remove('show');
+  const ib = document.getElementById('install-top-btn');
+  if (ib) ib.style.display = 'none';
+  localStorage.setItem('as_pwa_ok', '1');
+  UI.toast('AfriSpeak installed on your device! 🎉');
+});
+
+// Install button handler
+function triggerInstall() {
+  if (_installPrompt) {
+    _installPrompt.prompt();
+    _installPrompt.userChoice.then(r => {
+      console.log('[PWA] choice:', r.outcome);
+      _installPrompt = null;
+      document.getElementById('pwa-banner')?.classList.remove('show');
+      const ib = document.getElementById('install-top-btn');
+      if (ib) ib.style.display = 'none';
+    });
+  } else {
+    // Fallback instructions
+    const ua = navigator.userAgent.toLowerCase();
+    if (/iphone|ipad/.test(ua)) {
+      UI.toast('Tap Share → "Add to Home Screen" in Safari', false);
+    } else if (/android/.test(ua)) {
+      UI.toast('Tap ⋮ menu → "Add to Home Screen" in Chrome', false);
+    } else {
+      UI.toast('Click the install icon in the address bar ↑', false);
+    }
+  }
+}
+
+document.getElementById('pwa-install-btn')?.addEventListener('click', triggerInstall);
+document.getElementById('install-top-btn')?.addEventListener('click', triggerInstall);
+document.getElementById('pwa-dismiss')?.addEventListener('click', () => {
+  document.getElementById('pwa-banner')?.classList.remove('show');
+  localStorage.setItem('as_pwa_dismissed', Date.now().toString());
+});
+
+// Offline indicator
+window.addEventListener('online',  () => document.getElementById('offline-bar')?.classList.remove('show'));
+window.addEventListener('offline', () => { document.getElementById('offline-bar')?.classList.add('show'); UI.toast('You are offline — app still works!'); });
+
+// Handle start_url params
+(function() {
+  const p = new URLSearchParams(window.location.search);
+  const lang = p.get('lang');
+  if (lang && LANGS[lang]) setTimeout(() => App.enterLang(lang), 400);
+})();
+
+</script>
+
+<!-- PWA Install Banner -->
+<div class="pwa-banner" id="pwa-banner">
+  <img class="pwa-banner-icon" src="/icons/icon-192.png" alt="AfriSpeak"/>
+  <div class="pwa-banner-text">
+    <div class="pwa-banner-title">Install AfriSpeak AI</div>
+    <div class="pwa-banner-sub">Add to home screen — works offline too</div>
+  </div>
+  <button class="pwa-install-btn" id="pwa-install-btn">Install</button>
+  <button class="pwa-dismiss" id="pwa-dismiss">✕</button>
+</div>
+<div class="offline-bar" id="offline-bar">📡 You are offline — some features may not work</div>
+
+</body>
+</html>
