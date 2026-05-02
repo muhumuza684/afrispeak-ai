@@ -454,6 +454,7 @@ input,textarea,select{font-family:inherit;outline:none}
   transform:translateY(100%);transition:transform .35s ease;
 }
 .pwa-banner.show{transform:translateY(0)}
+.pwa-banner.hidden{transform:translateY(100%) !important}
 .pwa-banner-icon{width:42px;height:42px;border-radius:10px;flex-shrink:0}
 .pwa-banner-text{flex:1;min-width:0}
 .pwa-banner-title{font-size:13px;font-weight:700}
@@ -523,9 +524,13 @@ const CFG={
     messagingSenderId:"341379102993",
     appId:"1:341379102993:web:f65f651f0f11f5a209f4b0"
   },
-  model:"gemini-2.5-flash",maxMsgs:50,
+  // API keys injected at build time - see netlify.toml
+  groqKey:window.GROQ_KEY||"",
+  sunbirdKey:window.SUNBIRD_KEY||"",
+  groqModel:"llama-3.3-70b-versatile",
+  maxMsgs:50,
   xpLesson:15,xpQuizPass:25,xpPerfect:40
-};
+}
 
 /* ════════ LANGUAGES ════════ */
 const LANGS={
@@ -607,7 +612,7 @@ const S={
       if(!this.histories[k])this.histories[k]=[];
       if(!this.progress[k]) this.progress[k]={level:0,done:[],scores:{}};
     });
-    this.geminiKey=localStorage.getItem("as_k")||"AIzaSyDOa8pzBBaKbtwGDNlChS9jVHU2lBDN1kM";
+    this.geminiKey=localStorage.getItem("as_k")||"AIzaSyDOa8pzBBaKbtwGDNlChS9jVHU2lBDN1kM"; // kept as fallback only
     this._load();
   },
   _load(){
@@ -682,26 +687,128 @@ function parseResponse(text){
 
 /* ════════ AI SERVICE ════════ */
 const AI={
-  async _call(sys,msgs,max=1000){
-    const r=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${CFG.model}:generateContent?key=${S.geminiKey}`,{
-      method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({system_instruction:{parts:[{text:sys}]},contents:msgs.map(m=>({role:m.role==="assistant"?"model":"user",parts:[{text:m.content}]})),generationConfig:{temperature:.7,maxOutputTokens:max}})
+  // Ugandan languages → Sunbird first, Groq fallback
+  // Other languages   → Groq first, fallback chain
+  _ugandan: ['luganda','acholi','ateso','runyankole','lugbara'],
+
+  /* ── GROQ: fast, 6000 req/min free ── */
+  async _groq(sys, msgs, max=1000){
+    const messages = [{role:"system",content:sys}, ...msgs.map(m=>({"role":m.role==="assistant"?"assistant":"user","content":m.content}))];
+    const r = await fetch("https://api.groq.com/openai/v1/chat/completions",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+CFG.groqKey},
+      body:JSON.stringify({model:CFG.groqModel,messages,max_tokens:max,temperature:.7})
     });
-    const d=await r.json();if(d.error)throw new Error(d.error.message);
+    const d = await r.json();
+    if(d.error) throw new Error("Groq: "+d.error.message);
+    return d.choices[0].message.content;
+  },
+
+  /* ── SUNBIRD: best for Ugandan languages ── */
+  async _sunbird(text, sourceLang="eng", targetLang="lug"){
+    const r = await fetch("https://api.sunbird.ai/tasks/nllb_translate",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":"Bearer "+CFG.sunbirdKey},
+      body:JSON.stringify({source_language:sourceLang,target_language:targetLang,source_text:text})
+    });
+    const d = await r.json();
+    if(d.error||!d.output) throw new Error("Sunbird: "+(d.error||"No output"));
+    return d.output.translated_text;
+  },
+
+  /* ── GEMINI: last resort fallback ── */
+  async _gemini(sys, msgs, max=1000){
+    const geminiKey = S.geminiKey||"";
+    if(!geminiKey) throw new Error("No Gemini key");
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiKey}`,{
+      method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({system_instruction:{parts:[{text:sys}]},contents:msgs.map(m=>({"role":m.role==="assistant"?"model":"user","parts":[{"text":m.content}]})),generationConfig:{temperature:.7,maxOutputTokens:max}})
+    });
+    const d = await r.json();
+    if(d.error) throw new Error("Gemini: "+d.error.message);
     return d.candidates[0].content.parts[0].text;
   },
-  chat(msgs,lk){return this._call(LANGS[lk].sys,msgs,1000);},
-  translate(text,from,to){return this._call(`Expert African language translator. Translate from ${from} to ${to}. Return ONLY the translation.`,[{role:"user",content:text}],500);},
+
+  /* ── SMART ROUTER: tries best engine first ── */
+  async _call(sys, msgs, max=1000, langCode=""){
+    const isUgandan = this._ugandan.includes(langCode);
+    const errors = [];
+
+    // For Ugandan languages: try Groq first (handles conversation better)
+    // Sunbird is used specifically for translation tasks
+    // For all: Groq → Gemini fallback
+    try{
+      return await this._groq(sys, msgs, max);
+    }catch(e){
+      errors.push(e.message);
+      console.warn("[AI] Groq failed:", e.message);
+    }
+
+    // Fallback to Gemini
+    try{
+      return await this._gemini(sys, msgs, max);
+    }catch(e){
+      errors.push(e.message);
+      console.warn("[AI] Gemini failed:", e.message);
+    }
+
+    throw new Error("All AI services busy. Please try again in a moment. (" + errors[0] + ")");
+  },
+
+  /* ── SMART TRANSLATE: uses Sunbird for Ugandan langs ── */
+  async translate(text, fromName, toName){
+    // Language code mapping for Sunbird
+    const codeMap = {
+      "English":"eng","Luganda":"lug","Kiswahili":"swh",
+      "Acholi":"ach","Ateso":"teo","Runyankole":"nyn","Lugbara":"lgg"
+    };
+    const fromCode = codeMap[fromName];
+    const toCode   = codeMap[toName];
+
+    // Use Sunbird if both languages are supported
+    if(fromCode && toCode){
+      try{
+        return await this._sunbird(text, fromCode, toCode);
+      }catch(e){
+        console.warn("[AI] Sunbird translate failed:", e.message);
+      }
+    }
+
+    // Fallback to Groq for unsupported language pairs
+    return this._call(
+      `Expert African language translator. Translate from ${fromName} to ${toName}. Return ONLY the translation, nothing else.`,
+      [{role:"user",content:text}], 500
+    );
+  },
+
+  chat(msgs, lk){
+    return this._call(LANGS[lk].sys, msgs, 1000, lk);
+  },
+
   async phrases(langName){
-    const raw=await this._call("Return ONLY valid JSON array, no markdown.",[{role:"user",content:`7 practical everyday phrases in ${langName}. Format:[{"english":"...","local":"...","pronunciation":"..."}]`}],800);
+    const raw = await this._call(
+      "Return ONLY a valid JSON array, no markdown, no explanation.",
+      [{role:"user",content:`7 practical everyday phrases in ${langName}. Format:[{"english":"...","local":"...","pronunciation":"..."}]`}],
+      800
+    );
     return JSON.parse(raw.replace(/```json|```/g,"").trim());
   },
-  async lesson(langName,num,level){
-    const raw=await this._call("Return ONLY valid JSON, no markdown.",[{role:"user",content:`Create ${langName} lesson on "${TOPICS[(num-1)%TOPICS.length]}" for ${level} level. JSON: {"topic":"...","phrases":[{"english":"...","local":"...","pronunciation":"..."}],"culturalNote":"..."} — exactly 5 phrases.`}],1000);
+
+  async lesson(langName, num, level){
+    const raw = await this._call(
+      "Return ONLY valid JSON, no markdown, no explanation.",
+      [{role:"user",content:`Create ${langName} lesson on "${TOPICS[(num-1)%TOPICS.length]}" for ${level} level. JSON: {"topic":"...","phrases":[{"english":"...","local":"...","pronunciation":"..."}],"culturalNote":"..."} — exactly 5 phrases.`}],
+      1000
+    );
     return JSON.parse(raw.replace(/```json|```/g,"").trim());
   },
-  async quiz(langName,lessonData){
-    const raw=await this._call("Return ONLY valid JSON array, no markdown.",[{role:"user",content:`5-question quiz on ${langName} using: ${JSON.stringify(lessonData.phrases)}. Return:[{"type":"mcq","question":"...","options":["...","...","...","..."],"answer":"..."},{"type":"type","question":"...","answer":"..."}] alternating mcq/type, exactly 5 questions.`}],1200);
+
+  async quiz(langName, lessonData){
+    const raw = await this._call(
+      "Return ONLY a valid JSON array, no markdown, no explanation.",
+      [{role:"user",content:`Create a 5-question quiz on ${langName} using these phrases: ${JSON.stringify(lessonData.phrases)}. Return:[{"type":"mcq","question":"...","options":["...","...","...","..."],"answer":"..."},{"type":"type","question":"...","answer":"..."}] alternating mcq/type, exactly 5 questions.`}],
+      1200
+    );
     return JSON.parse(raw.replace(/```json|```/g,"").trim());
   }
 };
@@ -952,7 +1059,7 @@ const UI={
 
   main(){
     const m=document.getElementById("main");
-    if(!S.geminiKey){S.geminiKey='AIzaSyDOa8pzBBaKbtwGDNlChS9jVHU2lBDN1kM';}
+    // Keys hardcoded — no setup screen needed
     if(S.screen==="home")    {m.innerHTML=this._home();return;}
     if(S.screen==="history") {m.innerHTML=this._history();return;}
     if(S.screen==="profile") {m.innerHTML=this._profile();return;}
@@ -1029,7 +1136,7 @@ const UI={
     m.innerHTML=`
       <div class="chat-hdr">
         <div class="ch-av">${LANGS[S.lang].flag}</div>
-        <div><div class="ch-name">${LANGS[S.lang].name} Assistant</div><div class="ch-st"><span class="dot"></span>Online · Gemini 2.5 Flash</div></div>
+        <div><div class="ch-name">${LANGS[S.lang].name} Assistant</div><div class="ch-st"><span class="dot"></span>Online · Groq + Sunbird AI</div></div>
       </div>
       <div class="chat-area" id="ca"></div>
       <div class="vbar" id="vbar"><div class="vdot"></div>Listening... tap mic again to stop</div>
@@ -1631,6 +1738,29 @@ window.addEventListener('offline', () => { document.getElementById('offline-bar'
   const lang = p.get('lang');
   if (lang && LANGS[lang]) setTimeout(() => App.enterLang(lang), 400);
 })();
+
+
+/* ── HIDE INSTALL BANNER WHEN KEYBOARD OPENS ── */
+function handleFocusIn(){
+  document.getElementById('pwa-banner')?.classList.add('hidden');
+}
+function handleFocusOut(){
+  setTimeout(()=>{
+    const active = document.activeElement;
+    if(!active || !['INPUT','TEXTAREA','SELECT'].includes(active.tagName)){
+      document.getElementById('pwa-banner')?.classList.remove('hidden');
+    }
+  }, 200);
+}
+document.addEventListener('focusin',  e => { if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) handleFocusIn(); });
+document.addEventListener('focusout', e => { if(['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) handleFocusOut(); });
+
+/* ── ALSO FIX: X button on banner closes properly ── */
+document.getElementById('pwa-dismiss')?.addEventListener('click', ()=>{
+  const banner = document.getElementById('pwa-banner');
+  if(banner){ banner.classList.remove('show'); banner.style.display='none'; }
+  localStorage.setItem('as_pwa_dismissed','1');
+});
 
 </script>
 

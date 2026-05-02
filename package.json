@@ -1,0 +1,8 @@
+{
+  "name": "afrispeak-ai",
+  "version": "1.0.0",
+  "description": "AI-powered African language learning platform",
+  "scripts": {
+    "build": "node inject-keys.js"
+  }
+}
